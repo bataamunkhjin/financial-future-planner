@@ -1,78 +1,92 @@
-# Financial Future Planner (v2)
+# Financial Future Planner v3
 
-A **two-tab Streamlit financial-planning app** for coursework and portfolio demonstrations. Four essential mortgage inputs, five essential retirement inputs, many automated outputs. No sign-in, paid API, or database.
+A GitHub-ready two-tab Streamlit app for a finance class and personal portfolio. **Four required loan inputs + five required retirement inputs**; all other settings are optional and tucked inside expandable sections. No sign-in, bank connection, API key, or paid service.
 
-## Features
+## What the app does
 
-### Tab 1: Mortgage / Loan Planner
-- Scheduled principal-and-interest payment, total cost, payoff date, amortization charts, CSV schedule.
-- Extra principal payment comparison and interest/time saved.
-- **Automatic what-if scenarios:** standard / multiple extra-payment strategies; annual mortgage interest rate -2, -1, 0, +1, +2 percentage points (new-loan scenarios, *not* changes to an existing fixed rate).
-- **Personalized insights** that recalculate when inputs change.
-- **Mortgage vs investing:** invest spare cash while making regular payments versus prepay the mortgage first and invest freed payments afterwards. Both have **the same monthly cash budget**, including the last partial payment. Comparison ends at the original mortgage maturity. The comparison reuses the investment return assumption from the Retirement tab; it adds *no required inputs*.
-- Optional property tax, insurance, PMI and loan start date in an expander.
+### Mortgage / Loan Planner
+- Calculates fixed-rate monthly payment, scheduled versus accelerated payoff, total interest, and detailed amortization tables.
+- Generates automatic extra-payment and loan-rate what-if scenarios; rate changes are **hypothetical new-loan quotes**, not repricing an existing fixed loan.
+- **New in v3:** Shows the payment month/date at which **25%, 50%, 75%, and 100%** of the original principal has been repaid.
+- Compares prepaying the mortgage with investing spare cash, using the **same monthly budget and loan maturity** for both strategies.
+- **New in v3:** Fixed-return investment stress tests (0%, assumed -3 percentage points, assumed return, assumed +3 points, mortgage break-even return).
+- Charts, insights, CSV schedule downloads, and a PDF summary.
 
-### Tab 2: Retirement Planner
-- Retirement savings projections in today's purchasing power, estimated target using an editable initial withdrawal rate, required monthly savings and shortfall.
-- Yearly projection and Monte Carlo percentile fan chart with distinct metrics for reaching the target and funding withdrawals through the planning age.
-- **Earliest modeled eligible retirement age:** finds the first whole-year age where saved capital meets **both** the initial withdrawal-rule target and the *deterministic* present-value cost of monthly spending through the chosen planning horizon. This is **not** a guaranteed retirement age or a Monte Carlo success threshold.
-- **Automatic what-if scenarios:** ±2 percentage points on expected nominal return, +2 points inflation, +10% monthly saving, retirement 5 years earlier/later when valid. One variable changes at a time.
-- **Personalized insights** and CSV projections.
-- Optional return, inflation, withdrawal rate, volatility, planning age and simulation count in an expander.
+### Retirement Planner
+- Models saving and retirement spending in **today's purchasing power**.
+- Calculates projected portfolio, 4%-rule-style target with editable initial withdrawal rate, surplus or shortfall, and needed monthly contribution.
+- Finds earliest *modeled* eligible retirement age, checks both a withdrawal-rule target and a deterministic spending requirement; not a retirement guarantee.
+- Monte Carlo fan chart and separate probabilities for reaching the portfolio target and sustaining monthly spending through the planning age.
+- **New in v3:** Estimates real monthly contributions required to reach the initial withdrawal-rule portfolio target in **approximately 80% of illustrative simulated return paths**, reusing existing inputs. This is **not** 80% probability of sustaining retirement spending.
+- Auto what-if comparisons, downloadable CSVs, and PDF reporting.
 
-### Combined PDF report
-Use the **Download combined PDF** button in the sidebar or the Retirement tab. Generates an in-memory, multi-page ReportLab PDF containing both tabs' summary metrics, scenario comparisons, insights and simple vector charts, without an external service or font files. For portability, PDFs show `MNT` rather than the `₮` symbol. CSV downloads remain available for the full data tables.
+### Classroom-friendly additions
+- **New in v3:** Expandable **“Understand the calculations”** sections in each tab, explaining loan amortization, the real-return formula, and Monte Carlo simulation.
+- **New in v3:** `TEACHER_GUIDE.md` includes a four-minute live demonstration and explanation of every source file.
+- **New in v3:** `.github/workflows/tests.yml` automatically runs finance tests after commits/PRs when enabled on GitHub Actions.
+- Combined PDF includes all new results and works offline without custom font files or paid services.
 
-## File structure
+## Project files
 
+```text
+app.py                         Streamlit UI and charts
+finance.py                     Independent finance calculations
+report.py                      PDF generator
+requirements.txt               Packages installed by Streamlit Cloud
+README.md                      Project overview and setup
+TEACHER_GUIDE.md               Presentation walkthrough and formulas
+.streamlit/config.toml         Theme settings
+.github/workflows/tests.yml    GitHub Actions test workflow
+tests/test_finance.py          Loan and retirement baseline tests
+tests/test_features.py         v2 scenarios and report tests
+tests/test_v3.py               New v3 feature tests
+tests/smoke_app_mock.py        Simulated app interaction, no Streamlit needed
 ```
-app.py
-finance.py
-report.py
-requirements.txt
-README.md
-tests/
-    test_finance.py
-    test_features.py
-```
 
-> Upload these **files directly to your GitHub repository root** (do not upload the ZIP by itself, and do not nest the files in a second folder). `app.py` and `requirements.txt` should be visible at the top level.
+## Publish updates to GitHub
 
-## GitHub and Streamlit Cloud deployment
+1. Extract the ZIP. Open the resulting project folder.
+2. In your existing GitHub repository, upload the **contents** of the folder, keeping `app.py` and `requirements.txt` at the repository root. Replace existing files when prompted.
+3. Keep the `.streamlit` folder at the root for theme settings. Keep `.github/workflows/tests.yml` for automated tests if your repository accepts workflows. GitHub's web upload may require creating/editing nested files separately; GitHub Desktop or Cursor Git integration is easier for full-folder updates.
+4. Commit your changes to the branch Streamlit deploys (usually `main`).
+5. Open your existing Streamlit site; a successful GitHub commit should trigger a new deployment. If it doesn't, check Streamlit Cloud logs and the selected branch/main file.
 
-1. Create or open your public/private GitHub project repository (your choice; your Streamlit Cloud access must permit the repository).
-2. If updating an existing repo, replace `app.py`, `finance.py`, `requirements.txt`, `README.md` and upload the **new** `report.py` and `tests/test_features.py` alongside the existing files (test files are optional for the hosted app).
-3. Commit the changes to your default branch (usually `main`).
-4. Open https://share.streamlit.io and deploy or manage the existing app. Set the repository, `main` branch (or your actual branch), and **main file `app.py`**.
-5. Streamlit Cloud should install `requirements.txt` and rerun the updated app automatically. If it reports a missing `report` module, confirm **`report.py` is next to `app.py` in the repository root**.
+To create a new Streamlit Community Cloud app: go to https://share.streamlit.io, select your GitHub repository, branch, and `app.py` as the main file. Public deployments can be shared with a teacher via URL.
 
-No secrets or API keys are needed. Dependencies are listed in `requirements.txt`. On Streamlit Community Cloud, a public app can be shared with your instructor by URL.
+## Local installation with Cursor (Windows)
 
-## Run locally (Windows)
-
-Open the project folder in File Explorer, click the address bar, enter `cmd`, then run:
+1. Install Python 3.11 or 3.12 and Cursor.
+2. In Cursor: **File → Open Folder**, select this extracted project folder.
+3. Open **Terminal → New Terminal**, run:
 
 ```bat
 py -m pip install -r requirements.txt
 py -m streamlit run app.py
 ```
 
-If Windows uses `python` instead of `py`, substitute `python` in both commands. If `streamlit` is not recognized, use `py -m streamlit run app.py` instead of `streamlit run app.py`.
+If `py` is unavailable, use `python -m ...`. The browser opens at `http://localhost:8501`.
 
-## Tests
-
-The app's pure finance/report functions are tested without running a Streamlit server. Install test dependencies with `py -m pip install pytest pypdf` and run:
+## Run the tests
 
 ```bat
+py -m pip install pytest pypdf
 py -m pytest -q
 ```
 
-## Model assumptions and limitations
+`tests/smoke_app_mock.py` also exercises both currency choices and confirms the PDF can be generated without a real Streamlit browser session. To run it:
 
-- **Fixed-rate loan:** the nominal annual mortgage rate is divided by 12 for the monthly interest rate; extra payments reduce principal immediately; no prepayment fee, missed payment, or bank-specific rounding. Property tax, insurance and PMI appear in the household cash-outflow estimate only, **not** in mortgage amortization or the investing comparison.
-- **Investment comparison:** projected fixed **nominal effective annual** investment return, cash flows held constant in nominal terms, gains before investment taxes/fees. All monthly cash allocations are equal between strategies; unused funds from the last installment are immediately invested. Both loans are repaid by standard maturity and property value cancels out. Results are *hypothetical*, not market forecasts. Early debt repayment can improve certainty and reduce risk even if a hypothetical higher-return portfolio wins the calculation.
-- **Retirement:** savings, recurring contributions and spending targets are given in today's purchasing power. Constant real contributions and spending imply nominal cash figures grow over time with inflation. Nominal returns are translated into real returns. The initial withdrawal rate (default 4%) is a **heuristic**, not proof savings will last. The earliest modeled eligible age applies a constant-return requirement to spending through the selected planning age; it is **not** a probability of retirement success.
-- **Monte Carlo:** independent annual lognormal returns, user-assumed arithmetic nominal mean/volatility, constant inflation; each annual return is spread evenly through its 12 months. It omits taxes, fees, correlation, fat tails, spending changes, pension income, and market regime shifts. The random seed is fixed for reproducibility.
-- **Currency:** changing currency selections changes the symbol and initial example numbers, **not** exchange rates or the underlying numeric value.
+```bat
+py tests/smoke_app_mock.py
+```
 
-**Educational tool only — not personalized financial advice.**
+## Financial modeling assumptions
+
+- **Mortgage:** fixed nominal annual interest divided by 12, first payment one month after start, immediate principal reduction from extra payments, no bank-specific rounding, escrow adjustments, lender charges, penalties or missed payments. Tax/insurance/PMI add to monthly household outflow only; they don't change principal or interest computations.
+- **Mortgage vs investing:** same nominal monthly cash budget, same mortgage, same end date (original maturity). Market returns are shown as fixed-return what-if cases and exclude investment taxes and fees. Paying down debt reduces interest with much greater certainty than investment returns.
+- **Retirement inputs:** current savings, monthly contributions, and target spending are constant in **today's money**; real return comes from nominal investment return and inflation assumptions. Actual nominal contributions/spending would rise with inflation.
+- **Retirement eligibility:** uses a heuristic withdrawal rate and a constant-return spending present value test, not a guarantee or a simulation outcome.
+- **Retirement Monte Carlo:** independent annual lognormal return factors with a user-specified arithmetic expected return and volatility; inflation is fixed. Each annual return is spread across the year's 12 months. Ignores taxes, fees, correlation, regime changes, and pensions. Seed fixed to make class demos reproducible.
+- **80% savings target:** an illustrative **probability of reaching the initial withdrawal-rule portfolio at retirement**. It is *not* a 80% chance the money lasts through the chosen planning age. Use the separate sustain probability for that question.
+- **Currency:** USD, EUR, MNT selectors change display symbols and example starting amounts; they do **not** perform exchange conversion. PDFs use ISO `MNT` instead of the tugrik symbol for reliable PDF font rendering.
+
+**For education and scenario analysis, not personalized financial advice.**

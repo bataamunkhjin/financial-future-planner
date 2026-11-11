@@ -501,3 +501,139 @@ def compare_mortgage_vs_investing(
         "table": table,
         "horizon_months": n,
     }
+
+# -------------------- Financial Future Planner v3 --------------------
+
+def loan_payoff_milestones(schedule: pd.DataFrame, original_principal: float) -> pd.DataFrame:
+    """First payment at which 25%, 50%, 75%, and 100% is repaid.
+
+    Uses cumulative principal, never total repayments, so the percentage does not
+    overstate progress on high-interest loans.
+    """
+    if schedule.empty or original_principal <= 0:
+        raise ValueError("A positive loan and a nonempty schedule are required.")
+    rows = []
+    for share in (0.25, 0.50, 0.75, 1.0):
+        mask = schedule["Cumulative Principal"] >= original_principal * share - 1e-6
+        if not bool(mask.any()):
+            raise ValueError(f"Loan does not reach {share:.0%} payoff.")
+        row = schedule.loc[mask].iloc[0]
+        rows.append({
+            "Loan Repaid": f"{share:.0%}",
+            "Payment Month": int(row["Month"]),
+            "Payment Date": row["Payment Date"],
+            "Principal Repaid": float(row["Cumulative Principal"]),
+            "Balance Remaining": float(row["Ending Balance"]),
+        })
+    return pd.DataFrame(rows)
+
+
+def simulated_savings_goal(
+    current_age: int,
+    retirement_age: int,
+    current_savings: float,
+    monthly_contribution: float,
+    target_portfolio: float,
+    expected_nominal_return_pct: float,
+    inflation_pct: float,
+    annual_volatility_pct: float,
+    simulations: int = 1000,
+    target_probability: float = 0.80,
+    seed: int = 42,
+) -> dict:
+    """Minimum *real* monthly saving for a selected simulated target probability.
+
+    The simulated portfolio at retirement is linear in monthly contribution:
+      future_balance = current_savings * growth_factor + deposit * annuity_factor
+    Therefore the required contribution can be solved from one set of shared
+    market-return paths instead of dozens of expensive Monte Carlo searches.
+
+    This only targets the initial withdrawal-rule portfolio at retirement; it
+    does NOT target the probability of sustaining retirement withdrawals.
+    """
+    if not (0 < target_probability < 1):
+        raise ValueError("Target probability must lie strictly between 0 and 1.")
+    if current_age >= retirement_age or simulations < 1:
+        raise ValueError("Retirement age must exceed current age; need simulations.")
+    if current_savings < 0 or monthly_contribution < 0 or target_portfolio < 0:
+        raise ValueError("Amounts must be nonnegative.")
+    if annual_volatility_pct < 0 or expected_nominal_return_pct <= -100 or inflation_pct <= -100:
+        raise ValueError("Investment parameters are out of range.")
+    annual_mean_factor = 1 + expected_nominal_return_pct / 100.0
+    volatility = annual_volatility_pct / 100.0
+    sigma_log = np.sqrt(np.log1p((volatility / annual_mean_factor) ** 2))
+    mu_log = np.log(annual_mean_factor) - 0.5 * sigma_log ** 2
+    inflation_factor = 1 + inflation_pct / 100.0
+    rng = np.random.default_rng(seed)
+    accumulation_factor = np.ones(simulations)
+    contribution_factor = np.zeros(simulations)
+
+    for _ in range(retirement_age - current_age):
+        annual_factor = np.exp(mu_log + sigma_log * rng.standard_normal(simulations)) / inflation_factor
+        month_factor = annual_factor ** (1 / 12)
+        annuity_factor = np.full(simulations, 12.0)
+        # Stable 12-deposit future-value factor for monthly end-of-month saving.
+        np.divide(annual_factor - 1, month_factor - 1,
+                  out=annuity_factor, where=np.abs(month_factor - 1) > 1e-10)
+        contribution_factor = contribution_factor * annual_factor + annuity_factor
+        accumulation_factor *= annual_factor
+
+    base_balance = current_savings * accumulation_factor
+    required_per_path = (target_portfolio - base_balance) / contribution_factor
+    # Higher quantile implements a conservatively rounded empirical threshold:
+    # at least the requested fraction of paths should meet the target.
+    minimum_contribution = max(
+        0.0, float(np.quantile(required_per_path, target_probability, method="higher"))
+    )
+    minimum_contribution = float(np.nextafter(minimum_contribution, np.inf))
+    current_probability = float(np.mean(
+        base_balance + monthly_contribution * contribution_factor >= target_portfolio
+    ))
+    proposed_probability = float(np.mean(
+        base_balance + minimum_contribution * contribution_factor + 1e-6 >= target_portfolio
+    ))
+    return {
+        "probability_target": target_probability,
+        "monthly_contribution_needed": minimum_contribution,
+        "monthly_increase_needed": max(0.0, minimum_contribution - monthly_contribution),
+        "current_reach_probability": current_probability,
+        "achieved_probability": proposed_probability,
+        "simulations": simulations,
+    }
+
+
+def mortgage_investing_return_scenarios(
+    principal: float,
+    mortgage_rate_pct: float,
+    years: int,
+    extra_monthly_budget: float,
+    expected_nominal_return_pct: float,
+    start_date: date | None = None,
+) -> pd.DataFrame:
+    """Fixed-return stress tests of the same-cash-budget prepay-vs-invest comparison.
+
+    They are NOT market forecasts, and do not imply risk-free investment returns.
+    """
+    breakeven = ((1 + mortgage_rate_pct / 1200) ** 12 - 1) * 100
+    candidates = [
+        ("Zero investment growth", 0.0),
+        ("Return -3 percentage points", max(-99.0, expected_nominal_return_pct - 3)),
+        ("Entered return assumption", expected_nominal_return_pct),
+        ("Return +3 percentage points", expected_nominal_return_pct + 3),
+        ("Loan return break-even", breakeven),
+    ]
+    rows = []
+    for label, assumed_return in candidates:
+        result = compare_mortgage_vs_investing(
+            principal, mortgage_rate_pct, years, extra_monthly_budget,
+            assumed_return, start_date,
+        )
+        rows.append({
+            "Scenario": label,
+            "Investment Return (%)": float(assumed_return),
+            "Invest Final": result["invest_portfolio"],
+            "Prepay Final": result["prepay_portfolio"],
+            "Invest - Prepay": result["difference"],
+            "Favored Strategy": result["winner"],
+        })
+    return pd.DataFrame(rows)

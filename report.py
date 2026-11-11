@@ -138,6 +138,9 @@ def generate_pdf_report(
     loan_insights: list[str],
     retirement_insights: list[str],
     investment_insights: list[str],
+    loan_milestones: pd.DataFrame | None = None,
+    investment_sensitivity: pd.DataFrame | None = None,
+    savings_goal: dict | None = None,
 ) -> bytes:
     """Generate a small multi-page financial report from already-calculated app data."""
     code = code if code in {"USD", "MNT", "EUR"} else "CUR"
@@ -200,11 +203,24 @@ def generate_pdf_report(
         ("Invest extra", plot["Month"].to_numpy(), plot["Invest Strategy Net Wealth"].to_numpy(), BLUE),
         ("Prepay first", plot["Month"].to_numpy(), plot["Prepay Strategy Net Wealth"].to_numpy(), TEAL),
     ], width=width, height=145))
+    if loan_milestones is not None:
+        heading("Loan principal repayment milestones")
+        table(["Repaid", "Month", "Payoff date", "Balance remaining"], [
+            [row["Loan Repaid"], str(row["Payment Month"]), str(row["Payment Date"]),
+             _currency(row["Balance Remaining"], code)] for _, row in loan_milestones.iterrows()
+        ], [70, 65, 150, width - 285])
+    if investment_sensitivity is not None:
+        heading("Investing return stress test")
+        table(["Scenario", "Return", "Invest - prepay", "Favored strategy"], [
+            [row["Scenario"], f'{row["Investment Return (%)"]:.2f}%',
+             _currency(row["Invest - Prepay"], code), row["Favored Strategy"]]
+            for _, row in investment_sensitivity.iterrows()
+        ], [173, 65, 133, width - 371])
+        small("Investment return cases are hypothetical constants, not a probability distribution or recommended strategy.")
     heading("Loan and investing insights")
     for line in (loan_insights + investment_insights)[:5]:
         para("- " + line)
 
-    story.append(PageBreak())
     heading("03  |  Retirement readiness")
     table(["Retirement input", "Value", "Result", "Value"], [
         ["Current age", retirement["current_age"], "Planned retirement age", retirement["retirement_age"]],
@@ -216,6 +232,15 @@ def generate_pdf_report(
         ["Earliest modeled eligible age", str(retirement["earliest_age"]), "Plan through age", str(retirement["planning_age"])],
     ], [127, 119, 135, width-381])
     small("'Earliest modeled eligible age' requires both the withdrawal-rule target and enough capital to fund constant real spending through the chosen planning age under a constant return. It is not a probabilistic sustainable retirement age.")
+    if savings_goal is not None:
+        heading("Savings target based on simulated outcomes")
+        table(["Measurement", "Value", "Measurement", "Value"], [
+            ["Scenario target chance", f'{savings_goal["probability_target"]:.0%}',
+             "Current target chance", f'{savings_goal["current_reach_probability"]:.1%}'],
+            ["Monthly saving for target", _currency(savings_goal["monthly_contribution_needed"], code),
+             "Extra savings / month", _currency(savings_goal["monthly_increase_needed"], code)],
+        ], [122, 122, 145, width - 389])
+        small("The scenario chance describes reaching the initial withdrawal-rule portfolio at retirement, NOT the probability of funding spending through death.")
     heading("Automatic retirement what-if scenarios")
     table(["Scenario", "Retire age", "Portfolio (today's value)", "Surplus / shortfall"], [
         [r["Scenario"], int(r["Retirement Age"]), _currency(r["Portfolio"], code),
@@ -226,11 +251,31 @@ def generate_pdf_report(
         ("Real portfolio", retirement_projection_df["Age"].to_numpy(),
          retirement_projection_df["Balance (today's money)"].to_numpy(), TEAL),
     ], width=width, height=145))
+    story.append(PageBreak())
+    heading("04  |  Interpretation and model transparency")
     heading("Retirement insights")
     for line in retirement_insights[:4]:
         para("- " + line)
     small(f"Monte Carlo: {retirement['simulations']:,} illustrative independent-annual-return paths. Reaching portfolio target at retirement: {retirement['reach_probability']:.1%}. Fully funding withdrawals through age {retirement['planning_age']}: {retirement['sustain_probability']:.1%}.")
     small("Not modeled: local tax rules, employer/pension income, fees, shocks to inflation, changes in contribution or spending, variable mortgage rates, or correlations. Retirement assumptions use constant real purchasing power; mortgage investing comparison uses constant nominal cash flows.")
+    heading("What these results mean")
+    table(["Measure", "Interpretation"], [
+        ["Total loan interest", "Cumulative interest charged under the assumed fixed-rate amortization schedule."],
+        ["Principal milestones", "The first loan payment date when the stated share of ORIGINAL principal is repaid."],
+        ["Mortgage vs investing", "Two strategies with equal monthly cash spending, compared at original loan maturity."],
+        ["Retirement portfolio target", "Desired real annual retirement income divided by an editable initial withdrawal rate."],
+        ["Monte Carlo target probability", "Share of simulated paths reaching the initial retirement portfolio target."],
+        ["Monte Carlo sustain probability", "Share of simulated paths able to fund modeled monthly withdrawals until planning age."],
+    ], [175, width - 175])
+    heading("Calculation assumptions")
+    table(["Topic", "Method and important omissions"], [
+        ["Monthly loan payment", "Annual nominal loan rate divided by 12; extra repayments go to principal; no penalties."],
+        ["Investment comparison", "Constant nominal monthly budget and hypothetical fixed investment returns; no taxes or market risk."],
+        ["Real-value retirement model", "Annual nominal return and inflation converted to a monthly REAL return; spending and deposits constant in today's purchasing power."],
+        ["Monte Carlo simulation", "Independent annual lognormal return samples spread equally across each year; fixed inflation; fixed random seed."],
+        ["Initial withdrawal rule", "Rule-of-thumb funding test, not guaranteed lifetime income."],
+    ], [149, width - 149])
+    small("This is a simplified education-only analysis: do not substitute these outputs for a real lender quote, financial advisor, actuarial plan, or personalized investment recommendation.")
 
     doc.build(story)
     return buf.getvalue()

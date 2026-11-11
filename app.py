@@ -26,6 +26,9 @@ from finance import (
     earliest_feasible_retirement_age,
     retirement_what_if_scenarios,
     compare_mortgage_vs_investing,
+    loan_payoff_milestones,
+    simulated_savings_goal,
+    mortgage_investing_return_scenarios,
 )
 from report import generate_pdf_report
 
@@ -50,6 +53,12 @@ st.markdown(
     }
     [data-testid="stMetricValue"] {font-size: 1.65rem;}
     .subtle {color: #8291a2; font-size: 0.95rem;}
+    [data-testid="stExpander"] {border-radius: 12px;}
+    [data-testid="stMetricDelta"] {font-size: .9rem;}
+    @media (max-width: 760px) {
+        .block-container {padding-top: 1rem;}
+        [data-testid="stMetricValue"] {font-size: 1.3rem;}
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -93,7 +102,7 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
 
 
 st.title("📈 Financial Future Planner")
-st.markdown("**Two simple calculators. One clearer financial future.**")
+st.markdown("**Plan your debt. Stress-test your savings. Understand the trade-offs.**")
 st.caption(
     "Enter a few key numbers, then explore repayment strategies, retirement readiness, "
     "automatically generated scenarios, and interactive charts."
@@ -272,6 +281,32 @@ with loan_tab:
         "penalties, and no missed payments. Extra payments reduce principal."
     )
 
+    st.markdown("#### Loan payoff milestones")
+    milestones = loan_payoff_milestones(chosen, loan_amount)
+    milestones_display = milestones.copy()
+    milestones_display["Payment Date"] = milestones_display["Payment Date"].astype(str)
+    milestones_display["Principal Repaid"] = milestones_display["Principal Repaid"].map(money)
+    milestones_display["Balance Remaining"] = milestones_display["Balance Remaining"].map(money)
+    st.dataframe(milestones_display, hide_index=True, use_container_width=True)
+    st.caption("Milestones refer to the percentage of original loan PRINCIPAL repaid, not total cash spent.")
+    with st.expander("Understand the mortgage calculations · for your class presentation"):
+        st.markdown(r"""
+**1. Monthly fixed loan payment**
+
+$$M=P\frac{r(1+r)^n}{(1+r)^n-1}$$
+
+- $P$ = starting principal; $r$ = annual nominal interest rate divided by 12; $n$ = months.
+- When the interest rate is zero, monthly payment is simply $P/n$.
+- Monthly interest = remaining principal × monthly rate.
+- Principal repaid = actual payment − monthly interest. Extra payments go to principal.
+- The actual last payment is capped at the remaining balance plus interest.
+
+**2. Break-even investment return**
+
+The mortgage's effective annual borrowing rate is $((1+r)^{12}-1)\times100\%$.
+This is the mathematical break-even fixed return **before** investment taxes, fees, risk or liquidity differences.
+""")
+
     st.markdown("#### Monthly amortization schedule")
     display_schedule = chosen.copy()
     display_schedule["Payment Date"] = display_schedule["Payment Date"].astype(str)
@@ -379,6 +414,12 @@ with retirement_tab:
         expected_return, inflation, volatility, portfolio_target,
         simulations=int(simulations), seed=42,
     )
+    savings_goal_80 = simulated_savings_goal(
+        int(current_age), int(retirement_age), retirement_savings,
+        retirement_contribution, portfolio_target, expected_return,
+        inflation, volatility, simulations=int(simulations),
+        target_probability=0.80, seed=42,
+    )
 
     st.markdown("#### Retirement snapshot")
     r1, r2, r3, r4 = st.columns(4)
@@ -404,6 +445,21 @@ with retirement_tab:
             f"Withdrawal-rule target alone is first reached at age "
             f"{heuristic_target_age if heuristic_target_age is not None else 'beyond the planning horizon'}. "
             "The more conservative eligibility test also checks constant-return withdrawal funding."
+        )
+
+    st.markdown("#### Probability-based savings goal")
+    with st.container(border=True):
+        st.caption("Illustrative 80% chance of reaching the **initial withdrawal-rule portfolio target**, under the simulation's assumptions.")
+        g1, g2, g3 = st.columns(3)
+        g1.metric("Savings / month for ~80% target chance", money(savings_goal_80["monthly_contribution_needed"]))
+        g2.metric("Extra saving needed / month", money(savings_goal_80["monthly_increase_needed"]))
+        g3.metric("Current modeled chance of target", f"{savings_goal_80['current_reach_probability']:.1%}")
+        st.progress(min(1.0, max(0.0, savings_goal_80["current_reach_probability"])),
+                    text="Share of simulated paths reaching the initial portfolio target")
+        st.caption(
+            "The 80% goal is a fixed educational example, not a recommended risk tolerance. "
+            "This checks only the target portfolio at retirement. It does NOT mean an 80% "
+            "chance of funding all retirement withdrawals. Returns and inflation are uncertain."
         )
 
     st.markdown("#### Retirement trajectory and uncertainty")
@@ -485,6 +541,12 @@ with retirement_tab:
         f"withdrawals through age {planning_age}. These are separate measures."
     )
     retirement_insights.append(
+        f"To reach the withdrawal-rule portfolio target in roughly 80% of the same "
+        f"simulated paths, the modeled contribution is {money(savings_goal_80['monthly_contribution_needed'])} "
+        f"per month in today's money (an additional {money(savings_goal_80['monthly_increase_needed'])}). "
+        "This target probability is NOT the lifetime spending-success probability."
+    )
+    retirement_insights.append(
         "Simulated results use fixed inflation and independent annual market returns. "
         "Taxes, fees, pensions and spending changes could change actual outcomes."
     )
@@ -495,6 +557,29 @@ with retirement_tab:
             st.success(line)
         else:
             st.info(line)
+
+    with st.expander("Understand the retirement calculations · for your class presentation"):
+        st.markdown(r"""
+**1. Nominal to real (inflation-adjusted) return**
+
+$$r_{real,monthly}=\left(\frac{1+r_{nominal}}{1+i}\right)^{1/12}-1$$
+
+Here annual nominal return $r_{nominal}$ and annual inflation $i$ are decimals. Savings and spending stay constant in **today's purchasing power**.
+
+**2. Initial withdrawal-rule target**
+
+$$\text{Portfolio target}=\frac{12\times\text{target monthly income}}{\text{withdrawal rate}}$$
+
+This is a rule of thumb; it does not establish that the funds will last.
+
+**3. Monte Carlo simulation**
+
+For each simulated path, the model generates annual investment returns, converts them into monthly real growth, adds deposits until retirement, and models monthly withdrawals afterwards. The **target probability** and **spending sustainability probability** are calculated separately.
+
+**4. Savings goal for ~80% of simulated paths**
+
+For each path, the retirement balance equals the grown starting savings plus monthly deposits multiplied by their accumulation factor. Solving that equation for the contribution gives a required amount for each path. The app takes the 80th percentile of those amounts.
+""")
 
     st.markdown("#### Year-by-year balance projection")
     st.dataframe(
@@ -534,6 +619,9 @@ with retirement_tab:
 # Retirement tab's *existing* expected-return assumption: no fifth loan input.
 comparison_extra = extra_monthly if extra_monthly > 0 else scheduled_payment * 0.05
 invest_comparison = compare_mortgage_vs_investing(
+    loan_amount, interest_rate, loan_years, comparison_extra, expected_return, loan_start
+)
+investing_rate_cases = mortgage_investing_return_scenarios(
     loan_amount, interest_rate, loan_years, comparison_extra, expected_return, loan_start
 )
 investment_insights = [
@@ -590,6 +678,17 @@ with loan_tab:
         "Fixed return, no fees or taxes, no loan prepayment fee or investment risk modeling. "
         "Investing has market risk and is not guaranteed to outperform paying down debt."
     )
+    st.markdown("**Investment return stress test**")
+    show_investing_cases = investing_rate_cases.copy()
+    show_investing_cases["Investment Return (%)"] = show_investing_cases["Investment Return (%)"].map(lambda x: f"{x:.2f}%")
+    for key in ("Invest Final", "Prepay Final", "Invest - Prepay"):
+        show_investing_cases[key] = show_investing_cases[key].map(money)
+    st.dataframe(show_investing_cases, hide_index=True, use_container_width=True)
+    st.caption(
+        "Each row assumes a DIFFERENT constant investment return, not a predicted probability. "
+        "The 'Loan return break-even' row uses the fixed mortgage's effective annual borrowing rate. "
+        "Results exclude market volatility, taxes and fees."
+    )
     for insight in investment_insights:
         st.info(insight)
     with st.expander("See month-by-month mortgage vs. investing results"):
@@ -628,6 +727,9 @@ report_data = generate_pdf_report(
     },
     loan_rate_sensitivity=rate_scenarios,
     loan_extra_sensitivity=extra_scenarios,
+    loan_milestones=milestones,
+    investment_sensitivity=investing_rate_cases,
+    savings_goal=savings_goal_80,
     retirement_sensitivity=retirement_scenarios,
     investing=invest_comparison,
     base_loan_schedule=standard,
@@ -647,7 +749,9 @@ with st.sidebar:
         mime="application/pdf",
         use_container_width=True,
     )
-    st.caption("Includes both tabs, loan and retirement what-if scenarios, linked mortgage/investing comparison and insights.")
+    st.caption("Includes both tabs, loan and retirement what-if scenarios, milestones, stress tests and insights.")
+    st.divider()
+    st.caption("**Teacher demo:** open the project's TEACHER_GUIDE.md in Cursor for a short walkthrough and formulas.")
 
 with retirement_tab:
     st.markdown("#### Download your financial report")
