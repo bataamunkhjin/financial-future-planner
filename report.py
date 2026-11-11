@@ -52,7 +52,14 @@ def _styles():
 
 
 def _p(value, style):
-    return Paragraph(escape(str(value)), style)
+    # ReportLab built-in Helvetica has no tugrik glyph or several Unicode symbols.
+    # Keep the PDF portable by expanding them to plain-text alternatives.
+    safe = str(value)
+    for original, replacement in (("₮", "MNT "), ("€", "EUR "),
+                                  ("—", "-"), ("–", "-"), ("≈", "~"),
+                                  ("→", "->"), ("×", "x"), ("≥", ">=")):
+        safe = safe.replace(original, replacement)
+    return Paragraph(escape(safe), style)
 
 
 def _table(headers: list[str], rows: list[list], widths: list[float], styles):
@@ -218,29 +225,30 @@ def generate_pdf_report(
         ], [173, 65, 133, width - 371])
         small("Investment return cases are hypothetical constants, not a probability distribution or recommended strategy.")
     heading("Loan and investing insights")
-    for line in (loan_insights + investment_insights)[:5]:
+    for line in (loan_insights + investment_insights)[:2]:
         para("- " + line)
 
+    story.append(PageBreak())
     heading("03  |  Retirement readiness")
     table(["Retirement input", "Value", "Result", "Value"], [
         ["Current age", retirement["current_age"], "Planned retirement age", retirement["retirement_age"]],
         ["Savings today", _currency(retirement["savings"], code), "Monthly saving", _currency(retirement["contribution"], code)],
-        ["Target monthly spending", _currency(retirement["income"], code), "Initial withdrawal rule", f'{retirement["withdrawal_rate"]:.2f}%'],
+        ["Target monthly spending", _currency(retirement["income"], code), "Plan through age", str(retirement["planning_age"])],
         ["Nominal return assumption", f'{retirement["return"]:.2f}%', "Inflation assumption", f'{retirement["inflation"]:.2f}%'],
-        ["Estimated portfolio", _currency(retirement["planned_balance"], code), "Withdrawal-rule target", _currency(retirement["target"], code)],
+        ["Est. retirement portfolio", _currency(retirement["planned_balance"], code), "Capital needed for spending", _currency(retirement["target"], code)],
         ["Needed monthly saving", _currency(retirement["needed"], code), "Surplus / shortfall", _currency(retirement["difference"], code)],
-        ["Earliest modeled eligible age", str(retirement["earliest_age"]), "Plan through age", str(retirement["planning_age"])],
+        ["Earliest modeled retirement", str(retirement["earliest_age"]), "Spending success (sim.)", f'{retirement["sustain_probability"]:.1%}'],
     ], [127, 119, 135, width-381])
-    small("'Earliest modeled eligible age' requires both the withdrawal-rule target and enough capital to fund constant real spending through the chosen planning age under a constant return. It is not a probabilistic sustainable retirement age.")
+    small("Required capital is the present value of all planned monthly withdrawals through the planning age at a constant real return. Returns keep compounding after retirement; contributions end at retirement. This is not guaranteed.")
     if savings_goal is not None:
-        heading("Savings target based on simulated outcomes")
+        heading("Savings target for simulated spending success")
         table(["Measurement", "Value", "Measurement", "Value"], [
-            ["Scenario target chance", f'{savings_goal["probability_target"]:.0%}',
-             "Current target chance", f'{savings_goal["current_reach_probability"]:.1%}'],
-            ["Monthly saving for target", _currency(savings_goal["monthly_contribution_needed"], code),
+            ["Target success chance", f'{savings_goal["probability_target"]:.0%}',
+             "Current spending success", f'{savings_goal["current_sustain_probability"]:.1%}'],
+            ["Saving / month for goal", _currency(savings_goal["monthly_contribution_needed"], code),
              "Extra savings / month", _currency(savings_goal["monthly_increase_needed"], code)],
         ], [122, 122, 145, width - 389])
-        small("The scenario chance describes reaching the initial withdrawal-rule portfolio at retirement, NOT the probability of funding spending through death.")
+        small("The 80% goal measures simulated paths funding EVERY withdrawal through the chosen planning age, not just reaching an account balance at retirement. Market outcomes are uncertain.")
     heading("Automatic retirement what-if scenarios")
     table(["Scenario", "Retire age", "Portfolio (today's value)", "Surplus / shortfall"], [
         [r["Scenario"], int(r["Retirement Age"]), _currency(r["Portfolio"], code),
@@ -256,16 +264,16 @@ def generate_pdf_report(
     heading("Retirement insights")
     for line in retirement_insights[:4]:
         para("- " + line)
-    small(f"Monte Carlo: {retirement['simulations']:,} illustrative independent-annual-return paths. Reaching portfolio target at retirement: {retirement['reach_probability']:.1%}. Fully funding withdrawals through age {retirement['planning_age']}: {retirement['sustain_probability']:.1%}.")
+    small(f"Monte Carlo: {retirement['simulations']:,} illustrative independent-annual-return paths. Fully funding every withdrawal through age {retirement['planning_age']}: {retirement['sustain_probability']:.1%}.")
     small("Not modeled: local tax rules, employer/pension income, fees, shocks to inflation, changes in contribution or spending, variable mortgage rates, or correlations. Retirement assumptions use constant real purchasing power; mortgage investing comparison uses constant nominal cash flows.")
     heading("What these results mean")
     table(["Measure", "Interpretation"], [
         ["Total loan interest", "Cumulative interest charged under the assumed fixed-rate amortization schedule."],
         ["Principal milestones", "The first loan payment date when the stated share of ORIGINAL principal is repaid."],
         ["Mortgage vs investing", "Two strategies with equal monthly cash spending, compared at original loan maturity."],
-        ["Retirement portfolio target", "Desired real annual retirement income divided by an editable initial withdrawal rate."],
-        ["Monte Carlo target probability", "Share of simulated paths reaching the initial retirement portfolio target."],
-        ["Monte Carlo sustain probability", "Share of simulated paths able to fund modeled monthly withdrawals until planning age."],
+        ["Retirement capital needed", "Present value of planned real monthly spending through the chosen age, using a constant real return."],
+        ["80% simulated savings goal", "Monthly saving for at least ~80% of simulated paths to fund every modeled withdrawal."],
+        ["Monte Carlo spending success", "Share of simulated paths able to fund all modeled monthly withdrawals until planning age."],
     ], [175, width - 175])
     heading("Calculation assumptions")
     table(["Topic", "Method and important omissions"], [
@@ -273,7 +281,7 @@ def generate_pdf_report(
         ["Investment comparison", "Constant nominal monthly budget and hypothetical fixed investment returns; no taxes or market risk."],
         ["Real-value retirement model", "Annual nominal return and inflation converted to a monthly REAL return; spending and deposits constant in today's purchasing power."],
         ["Monte Carlo simulation", "Independent annual lognormal return samples spread equally across each year; fixed inflation; fixed random seed."],
-        ["Initial withdrawal rule", "Rule-of-thumb funding test, not guaranteed lifetime income."],
+        ["Drawdown capital method", "Discounted monthly withdrawals over the selected horizon at an assumed constant real return."],
     ], [149, width - 149])
     small("This is a simplified education-only analysis: do not substitute these outputs for a real lender quote, financial advisor, actuarial plan, or personalized investment recommendation.")
 

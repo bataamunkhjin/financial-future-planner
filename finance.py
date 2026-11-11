@@ -366,33 +366,23 @@ def earliest_feasible_retirement_age(
     monthly_contribution: float,
     monthly_target_income: float,
     monthly_real_return: float,
-    withdrawal_rate_pct: float = 4.0,
 ) -> dict | None:
-    """Earliest whole age satisfying both initial withdrawal target and *deterministic*
-    funding of target spending through planning_age, with saving until retirement.
+    """Earliest whole retirement age whose balance funds every modeled withdrawal.
 
-    No Monte Carlo guarantee. In particular, post-retirement market volatility is
-    excluded, and the planning horizon is a user choice rather than a lifespan bound.
+    The post-retirement portfolio continues compounding at the assumed constant
+    real rate, while end-of-month spending is paid until the planning age.
+    This is a deterministic result, not a probabilistic guarantee.
     """
-    if current_age >= planning_age or monthly_target_income < 0 or withdrawal_rate_pct <= 0:
-        raise ValueError("Invalid ages, target monthly income or withdrawal rate.")
-    rule_target = 12 * monthly_target_income / (withdrawal_rate_pct / 100)
+    if current_age >= planning_age or monthly_target_income < 0:
+        raise ValueError("Invalid ages or target monthly income.")
     for age in range(current_age + 1, planning_age):
         months_until = (age - current_age) * 12
         nest_egg = grow_savings(current_savings, monthly_contribution, months_until, monthly_real_return)
         months_retired = (planning_age - age) * 12
-        drawdown_target = drawdown_portfolio_requirement(monthly_target_income, months_retired, monthly_real_return)
-        required = max(rule_target, drawdown_target)
-        if nest_egg + 1e-6 >= required:
-            return {
-                "age": age,
-                "portfolio": float(nest_egg),
-                "required_portfolio": float(required),
-                "withdrawal_rule_target": float(rule_target),
-                "deterministic_drawdown_target": float(drawdown_target),
-            }
+        required = drawdown_portfolio_requirement(monthly_target_income, months_retired, monthly_real_return)
+        if nest_egg + max(0.01, required * 1e-10) >= required:
+            return {"age": age, "portfolio": float(nest_egg), "required_portfolio": float(required)}
     return None
-
 
 def retirement_what_if_scenarios(
     current_age: int,
@@ -403,9 +393,8 @@ def retirement_what_if_scenarios(
     monthly_target_income: float,
     expected_return_pct: float,
     inflation_pct: float,
-    withdrawal_rate_pct: float,
 ) -> pd.DataFrame:
-    """Change one variable at a time to make scenario changes interpretable."""
+    """One-change-at-a-time scenarios, all using the same monthly drawdown test."""
     configs = [
         ("Base plan", retirement_age, monthly_contribution, expected_return_pct, inflation_pct),
         ("Investment return -2 pp", retirement_age, monthly_contribution, expected_return_pct - 2, inflation_pct),
@@ -417,12 +406,13 @@ def retirement_what_if_scenarios(
         configs.append(("Retire 5 years earlier", retirement_age - 5, monthly_contribution, expected_return_pct, inflation_pct))
     if retirement_age + 5 < planning_age:
         configs.append(("Retire 5 years later", retirement_age + 5, monthly_contribution, expected_return_pct, inflation_pct))
-
-    target = monthly_target_income * 12 / (withdrawal_rate_pct / 100)
     rows = []
     for label, age, contrib, nominal_return, inflation in configs:
         real = real_monthly_return(nominal_return, inflation)
         balance = grow_savings(current_savings, contrib, (age - current_age) * 12, real)
+        retire_months = (planning_age - age) * 12
+        target = drawdown_portfolio_requirement(monthly_target_income, retire_months, real)
+        unit_target = drawdown_portfolio_requirement(1, retire_months, real)
         rows.append({
             "Scenario": label,
             "Retirement Age": age,
@@ -430,11 +420,12 @@ def retirement_what_if_scenarios(
             "Return (%)": nominal_return,
             "Inflation (%)": inflation,
             "Portfolio": balance,
+            "Capital Needed": target,
             "Surplus / Shortfall": balance - target,
-            "Monthly Income (rule)": balance * withdrawal_rate_pct / 100 / 12,
+            "Sustainable Monthly Income": balance / unit_target if unit_target else 0.0,
+            "Funds Spending": bool(balance + max(0.01, target * 1e-10) >= target),
         })
     return pd.DataFrame(rows)
-
 
 def compare_mortgage_vs_investing(
     principal: float,
@@ -532,12 +523,13 @@ def loan_payoff_milestones(schedule: pd.DataFrame, original_principal: float) ->
     return pd.DataFrame(rows)
 
 
-def simulated_savings_goal(
+def simulated_lifetime_savings_goal(
     current_age: int,
     retirement_age: int,
+    planning_age: int,
     current_savings: float,
     monthly_contribution: float,
-    target_portfolio: float,
+    monthly_retirement_income: float,
     expected_nominal_return_pct: float,
     inflation_pct: float,
     annual_volatility_pct: float,
@@ -545,66 +537,73 @@ def simulated_savings_goal(
     target_probability: float = 0.80,
     seed: int = 42,
 ) -> dict:
-    """Minimum *real* monthly saving for a selected simulated target probability.
+    """Minimum real monthly saving for a specified *lifetime funding* probability.
 
-    The simulated portfolio at retirement is linear in monthly contribution:
-      future_balance = current_savings * growth_factor + deposit * annuity_factor
-    Therefore the required contribution can be solved from one set of shared
-    market-return paths instead of dozens of expensive Monte Carlo searches.
+    Returns across the complete pre- and post-retirement horizon are sampled once.
+    Each simulated path defines:
+       balance at retirement = initial_savings * A + monthly_contribution * B
+       minimum required capital = PV of every retirement withdrawal on that path
+    Solve for the smallest contribution that succeeds on each path, then select
+    the target quantile. This measures paying *every* retirement withdrawal,
+    not simply reaching a generic withdrawal-rule balance at retirement.
 
-    This only targets the initial withdrawal-rule portfolio at retirement; it
-    does NOT target the probability of sustaining retirement withdrawals.
+    Uses the same random draw sequence, fixed inflation and lognormal return
+    assumptions as monte_carlo_projection, for comparable probabilities.
     """
     if not (0 < target_probability < 1):
         raise ValueError("Target probability must lie strictly between 0 and 1.")
-    if current_age >= retirement_age or simulations < 1:
-        raise ValueError("Retirement age must exceed current age; need simulations.")
-    if current_savings < 0 or monthly_contribution < 0 or target_portfolio < 0:
+    if not (current_age < retirement_age < planning_age) or simulations < 1:
+        raise ValueError("Require current age < retirement age < planning age and simulations >= 1.")
+    if min(current_savings, monthly_contribution, monthly_retirement_income) < 0:
         raise ValueError("Amounts must be nonnegative.")
     if annual_volatility_pct < 0 or expected_nominal_return_pct <= -100 or inflation_pct <= -100:
-        raise ValueError("Investment parameters are out of range.")
-    annual_mean_factor = 1 + expected_nominal_return_pct / 100.0
-    volatility = annual_volatility_pct / 100.0
-    sigma_log = np.sqrt(np.log1p((volatility / annual_mean_factor) ** 2))
-    mu_log = np.log(annual_mean_factor) - 0.5 * sigma_log ** 2
+        raise ValueError("Investment assumptions are out of range.")
+
+    mean_factor = 1 + expected_nominal_return_pct / 100.0
+    sigma_log = np.sqrt(np.log1p((annual_volatility_pct / 100.0 / mean_factor) ** 2))
+    mu_log = np.log(mean_factor) - 0.5 * sigma_log**2
     inflation_factor = 1 + inflation_pct / 100.0
     rng = np.random.default_rng(seed)
-    accumulation_factor = np.ones(simulations)
-    contribution_factor = np.zeros(simulations)
+    years = planning_age - current_age
+    retirement_idx = retirement_age - current_age
+    annual_real_factors = np.vstack([
+        np.exp(mu_log + sigma_log * rng.standard_normal(simulations)) / inflation_factor
+        for _ in range(years)
+    ])
 
-    for _ in range(retirement_age - current_age):
-        annual_factor = np.exp(mu_log + sigma_log * rng.standard_normal(simulations)) / inflation_factor
-        month_factor = annual_factor ** (1 / 12)
-        annuity_factor = np.full(simulations, 12.0)
-        # Stable 12-deposit future-value factor for monthly end-of-month saving.
-        np.divide(annual_factor - 1, month_factor - 1,
-                  out=annuity_factor, where=np.abs(month_factor - 1) > 1e-10)
-        contribution_factor = contribution_factor * annual_factor + annuity_factor
-        accumulation_factor *= annual_factor
+    accumulation = np.ones(simulations)
+    annuity = np.zeros(simulations)
+    for year in range(retirement_idx):
+        monthly_factor = annual_real_factors[year] ** (1 / 12)
+        for _ in range(12):
+            accumulation *= monthly_factor
+            annuity = annuity * monthly_factor + 1.0
 
-    base_balance = current_savings * accumulation_factor
-    required_per_path = (target_portfolio - base_balance) / contribution_factor
-    # Higher quantile implements a conservatively rounded empirical threshold:
-    # at least the requested fraction of paths should meet the target.
-    minimum_contribution = max(
-        0.0, float(np.quantile(required_per_path, target_probability, method="higher"))
-    )
-    minimum_contribution = float(np.nextafter(minimum_contribution, np.inf))
-    current_probability = float(np.mean(
-        base_balance + monthly_contribution * contribution_factor >= target_portfolio
-    ))
-    proposed_probability = float(np.mean(
-        base_balance + minimum_contribution * contribution_factor + 1e-6 >= target_portfolio
-    ))
+    # Work backward to determine capital needed at retirement for every path.
+    # Returns are positive multipliers, so funding all withdrawals is equivalent
+    # to funding their discounted present value at retirement.
+    required_at_retirement = np.zeros(simulations)
+    for year in range(years - 1, retirement_idx - 1, -1):
+        monthly_factor = annual_real_factors[year] ** (1 / 12)
+        for _ in range(12):
+            required_at_retirement = (required_at_retirement + monthly_retirement_income) / monthly_factor
+
+    base_at_retirement = current_savings * accumulation
+    needed_each_path = (required_at_retirement - base_at_retirement) / annuity
+    monthly_needed = max(0.0, float(np.quantile(needed_each_path, target_probability, method="higher")))
+    monthly_needed = float(np.nextafter(monthly_needed, np.inf)) if monthly_needed > 0 else 0.0
+    tolerance = np.maximum(0.01, required_at_retirement * 1e-10)
+    current_probability = float(np.mean(base_at_retirement + monthly_contribution * annuity + tolerance >= required_at_retirement))
+    achieved_probability = float(np.mean(base_at_retirement + monthly_needed * annuity + tolerance >= required_at_retirement))
+
     return {
         "probability_target": target_probability,
-        "monthly_contribution_needed": minimum_contribution,
-        "monthly_increase_needed": max(0.0, minimum_contribution - monthly_contribution),
-        "current_reach_probability": current_probability,
-        "achieved_probability": proposed_probability,
+        "monthly_contribution_needed": monthly_needed,
+        "monthly_increase_needed": max(0.0, monthly_needed - monthly_contribution),
+        "current_sustain_probability": current_probability,
+        "achieved_probability": achieved_probability,
         "simulations": simulations,
     }
-
 
 def mortgage_investing_return_scenarios(
     principal: float,

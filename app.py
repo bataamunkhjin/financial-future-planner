@@ -14,7 +14,6 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from finance import (
-    earliest_target_age,
     grow_savings,
     loan_payment,
     loan_schedule,
@@ -29,7 +28,7 @@ from finance import (
     retirement_what_if_scenarios,
     compare_mortgage_vs_investing,
     loan_payoff_milestones,
-    simulated_savings_goal,
+    simulated_lifetime_savings_goal,
     drawdown_portfolio_requirement,
     mortgage_investing_return_scenarios,
 )
@@ -429,16 +428,14 @@ with retirement_tab:
 
         with st.expander("Advanced retirement assumptions (optional)"):
             st.caption("Illustrative assumptions, not forecasts or guaranteed performance.")
-            v1, v2, v3, v4, v5 = st.columns(5)
+            v1, v2, v3, v4 = st.columns(4)
             with v1:
                 expected_return = st.number_input("Annual nominal return (%)", min_value=-10.0, max_value=30.0, value=7.0, step=0.5)
             with v2:
                 inflation = st.number_input("Annual inflation (%)", min_value=0.0, max_value=30.0, value=2.5, step=0.5)
             with v3:
-                withdrawal_rate = st.number_input("Initial withdrawal rate (%)", min_value=1.0, max_value=10.0, value=4.0, step=0.25)
-            with v4:
                 volatility = st.number_input("Annual volatility (%)", min_value=0.0, max_value=60.0, value=15.0, step=1.0)
-            with v5:
+            with v4:
                 planning_age = st.number_input(
                     "Plan through age", min_value=int(retirement_age) + 1,
                     max_value=110, value=max(100, int(retirement_age) + 1), step=1,
@@ -453,25 +450,24 @@ with retirement_tab:
     months_to_retire = int((retirement_age - current_age) * 12)
     real_rate = real_monthly_return(expected_return, inflation)
     planned_balance = grow_savings(retirement_savings, retirement_contribution, months_to_retire, real_rate)
-    portfolio_target = 12 * target_income / (withdrawal_rate / 100)
+    retirement_months = (int(planning_age) - int(retirement_age)) * 12
+    # This target is derived from planned real spending and the chosen horizon.
+    # Contributions cease at retirement; returns continue during withdrawals.
+    portfolio_target = drawdown_portfolio_requirement(target_income, retirement_months, real_rate)
     difference = planned_balance - portfolio_target
     needed_per_month = required_monthly_contribution(retirement_savings, months_to_retire, portfolio_target, real_rate)
     projected_contributions = retirement_savings + retirement_contribution * months_to_retire
     investment_growth = planned_balance - projected_contributions
-    supported_income = planned_balance * (withdrawal_rate / 100) / 12
-    heuristic_target_age = earliest_target_age(
-        int(current_age), retirement_savings, retirement_contribution,
-        portfolio_target, real_rate, max_age=int(planning_age),
-    )
+    supported_income = planned_balance / drawdown_portfolio_requirement(1.0, retirement_months, real_rate)
     feasible_retirement = earliest_feasible_retirement_age(
         int(current_age), int(planning_age), retirement_savings, retirement_contribution,
-        target_income, real_rate, withdrawal_rate,
+        target_income, real_rate,
     )
     earliest_age = feasible_retirement["age"] if feasible_retirement else None
     retirement_scenarios = retirement_what_if_scenarios(
         int(current_age), int(retirement_age), int(planning_age),
         retirement_savings, retirement_contribution, target_income,
-        expected_return, inflation, withdrawal_rate,
+        expected_return, inflation,
     )
     projection, depletion_age = retirement_projection(
         int(current_age), int(retirement_age), int(planning_age),
@@ -484,28 +480,15 @@ with retirement_tab:
         expected_return, inflation, volatility, portfolio_target,
         simulations=int(simulations), seed=42,
     )
-    savings_goal_80 = simulated_savings_goal(
-        int(current_age), int(retirement_age), retirement_savings,
-        retirement_contribution, portfolio_target, expected_return,
-        inflation, volatility, simulations=int(simulations),
-        target_probability=0.80, seed=42,
+    savings_goal_80 = simulated_lifetime_savings_goal(
+        int(current_age), int(retirement_age), int(planning_age),
+        retirement_savings, retirement_contribution, target_income,
+        expected_return, inflation, volatility,
+        simulations=int(simulations), target_probability=0.80, seed=42,
     )
-
-    # This spending-through-planning-age check is separate from the 4% rule.
-    # It uses the same real monthly return and monthly withdrawals as the
-    # constant-return retirement projection, avoiding inconsistent assumptions.
-    retirement_months = (int(planning_age) - int(retirement_age)) * 12
-    drawdown_capital_needed = drawdown_portfolio_requirement(
-        target_income, retirement_months, real_rate,
-    )
-    monthly_income_to_horizon = (
-        planned_balance / drawdown_portfolio_requirement(1.0, retirement_months, real_rate)
-        if retirement_months > 0 else 0.0
-    )
-    monthly_saving_to_horizon = required_monthly_contribution(
-        retirement_savings, months_to_retire, drawdown_capital_needed, real_rate,
-    )
-    additional_saving_to_horizon = max(0.0, monthly_saving_to_horizon - retirement_contribution)
+    monthly_income_to_horizon = supported_income
+    monthly_saving_to_horizon = needed_per_month
+    additional_saving_to_horizon = max(0.0, needed_per_month - retirement_contribution)
     lasts_to_horizon = depletion_age is None
 
     st.markdown(f"#### Can you fund {money(target_income)}/month through age {planning_age}?")
@@ -528,9 +511,9 @@ with retirement_tab:
         life4.metric("Extra saving/month for this goal", money(additional_saving_to_horizon))
         st.caption(
             f"To fund the full {money(target_income)}/month through age {planning_age} under a "
-            f"constant real return, the model estimates a portfolio of {money(drawdown_capital_needed)} "
+            f"constant real return, the model estimates a portfolio of {money(portfolio_target)} "
             f"at retirement and total monthly saving of {money(monthly_saving_to_horizon)} "
-            f"before retirement. This is a fixed-horizon drawdown calculation, not the 4% withdrawal rule."
+            f"before retirement. This is a fixed-horizon drawdown calculation, not a guaranteed result."
         )
         st.caption(
             f"In {int(simulations):,} illustrative variable-return simulations, "
@@ -541,42 +524,35 @@ with retirement_tab:
     st.markdown("#### Retirement snapshot")
     r1, r2, r3, r4 = st.columns(4)
     r1.metric("Portfolio at retirement · real", money(planned_balance))
-    r2.metric("Portfolio needed · withdrawal rule", money(portfolio_target))
-    r3.metric("Monthly income supported", money(supported_income))
-    r4.metric("Readiness · withdrawal rule", "On track" if difference >= 0 else "Shortfall", money(difference))
+    r2.metric(f"Portfolio needed through age {planning_age}", money(portfolio_target))
+    r3.metric("Monthly spending supported", money(supported_income))
+    r4.metric("Readiness · spending horizon", "On track" if lasts_to_horizon else "Shortfall", money(difference))
 
     with st.container(border=True):
         j1, j2, j3, j4 = st.columns(4)
         j1.metric("Monthly saving needed", money(needed_per_month))
         j2.metric("Additional saving / month", money(max(0.0, needed_per_month - retirement_contribution)))
         j3.metric("Estimated investment growth", money(investment_growth))
-        j4.metric("Earliest modeled eligible age", str(earliest_age) if earliest_age is not None else f"Not by {planning_age}")
+        j4.metric("Earliest modeled retirement age", str(earliest_age) if earliest_age is not None else f"Not by {planning_age}")
         st.caption(
-            f"All amounts shown in today's {currency_choice.split(' ')[0]} purchasing power. "
-            f"Portfolio target = target income × 12 ÷ {withdrawal_rate:.2f}% initial withdrawal rate. "
-            "The earliest modeled eligible age requires both this withdrawal-rule target and "
-            "enough funds to cover target withdrawals through the planning age under a constant return. "
-            "Neither measure guarantees successful retirement."
-        )
-        st.caption(
-            f"Withdrawal-rule target alone is first reached at age "
-            f"{heuristic_target_age if heuristic_target_age is not None else 'beyond the planning horizon'}. "
-            "The more conservative eligibility test also checks constant-return withdrawal funding."
+            f"All amounts are in today's {currency_choice.split(' ')[0]} purchasing power. "
+            f"The capital target is the present value of {money(target_income)} monthly withdrawals "
+            f"from age {retirement_age} through age {planning_age} at the assumed constant real return. "
+            "Remaining funds continue earning returns during retirement. This is not a guarantee."
         )
 
-    st.markdown("#### Probability-based savings goal")
+    st.markdown("#### Savings goal for 80% modeled spending success")
     with st.container(border=True):
-        st.caption("Illustrative 80% chance of reaching the **initial withdrawal-rule portfolio target**, under the simulation's assumptions.")
+        st.caption(f"Savings needed for approximately 80% of simulated paths to pay every monthly withdrawal through age {planning_age}.")
         g1, g2, g3 = st.columns(3)
-        g1.metric("Savings / month for ~80% target chance", money(savings_goal_80["monthly_contribution_needed"]))
+        g1.metric("Savings / month for ~80% success", money(savings_goal_80["monthly_contribution_needed"]))
         g2.metric("Extra saving needed / month", money(savings_goal_80["monthly_increase_needed"]))
-        g3.metric("Current modeled chance of target", f"{savings_goal_80['current_reach_probability']:.1%}")
-        st.progress(min(1.0, max(0.0, savings_goal_80["current_reach_probability"])),
-                    text="Share of simulated paths reaching the initial portfolio target")
+        g3.metric("Current modeled spending success", f"{savings_goal_80['current_sustain_probability']:.1%}")
+        st.progress(min(1.0, max(0.0, savings_goal_80["current_sustain_probability"])),
+                    text="Share of simulated paths funding all monthly spending")
         st.caption(
-            "The 80% goal is a fixed educational example, not a recommended risk tolerance. "
-            "This checks only the target portfolio at retirement. It does NOT mean an 80% "
-            "chance of funding all retirement withdrawals. Returns and inflation are uncertain."
+            "The 80% goal is an illustrative planning threshold, not a recommended risk tolerance. "
+            "Success depends on the assumed market return distribution, constant inflation, and selected planning age."
         )
 
     st.markdown("#### Retirement trajectory and uncertainty")
@@ -610,7 +586,7 @@ with retirement_tab:
     )
 
     p1, p2, p3 = st.columns(3)
-    p1.metric("Simulations reaching target at retirement", f"{100 * simulation['reach_target_probability']:.1f}%")
+    p1.metric("Required monthly saving · fixed return", money(needed_per_month))
     p2.metric(f"Simulations funding withdrawals through age {planning_age}", f"{100 * simulation['sustain_probability']:.1f}%")
     p3.metric(
         "Constant-return income depletion",
@@ -619,10 +595,11 @@ with retirement_tab:
 
     st.markdown("#### Automatic retirement what-if scenarios")
     show_retirement_scenarios = retirement_scenarios.copy()
-    for col in ["Monthly Savings", "Portfolio", "Surplus / Shortfall", "Monthly Income (rule)"]:
+    for col in ["Monthly Savings", "Portfolio", "Capital Needed", "Surplus / Shortfall", "Sustainable Monthly Income"]:
         show_retirement_scenarios[col] = show_retirement_scenarios[col].map(money)
     for col in ["Return (%)", "Inflation (%)"]:
         show_retirement_scenarios[col] = show_retirement_scenarios[col].map(lambda x: f"{x:.1f}%")
+    show_retirement_scenarios["Funds Spending"] = show_retirement_scenarios["Funds Spending"].map({True: "Yes", False: "No"})
     st.dataframe(show_retirement_scenarios, use_container_width=True, hide_index=True)
     st.caption(
         "Each what-if scenario changes only one assumption from your base plan. "
@@ -636,49 +613,42 @@ with retirement_tab:
         retirement_insights.append(
             f"Under a constant real return, the current plan funds {money(target_income)} "
             f"per month from age {retirement_age} through age {planning_age}. "
-            f"The simulated share funding all withdrawals is {simulation['sustain_probability']:.1%}."
+            f"The simulated share funding every withdrawal is {simulation['sustain_probability']:.1%}."
         )
     else:
         retirement_insights.append(
             f"At {money(target_income)} per month, constant-return savings run short around "
             f"age {depletion_age:.1f}, before age {planning_age}. "
             f"An additional {money(additional_saving_to_horizon)} per month before retirement "
-            "would meet the fixed-return drawdown calculation, but does not ensure success under market volatility."
-        )
-    if difference >= 0:
-        retirement_insights.append(
-            f"At the assumed constant return, your projected portfolio exceeds "
-            f"the {withdrawal_rate:.2f}% withdrawal-rule target by {money(difference)}."
-        )
-    else:
-        retirement_insights.append(
-            f"At the assumed constant return, your plan falls short of the withdrawal-rule "
-            f"target by {money(-difference)}. Increasing real monthly savings by "
-            f"approximately {money(max(0.0, needed_per_month - retirement_contribution))} "
-            "may close that modeled gap."
+            "would meet the fixed-return drawdown calculation, not eliminate market risk."
         )
     retirement_insights.append(
-        (f"The earliest modeled eligible retirement age is {earliest_age} under "
-         f"the constant-return and age-{planning_age} spending assumptions."
+        (f"At the assumed constant return, the projected retirement balance exceeds "
+         f"the capital needed to fund spending through age {planning_age} by {money(difference)}."
+         if difference >= 0 else
+         f"At the assumed constant return, the retirement portfolio falls short of the "
+         f"age-{planning_age} spending requirement by {money(-difference)}.")
+    )
+    retirement_insights.append(
+        (f"The earliest modeled retirement age is {earliest_age}, based on funding all "
+         f"monthly withdrawals through age {planning_age} under a constant real return."
          if earliest_age is not None else
-         f"No whole-year retirement age through {planning_age-1} meets both modeled "
-         "funding tests with current contributions.")
+         f"No whole-year retirement age through {planning_age-1} funds all modeled "
+         "withdrawals with current contributions under the fixed-return assumption.")
     )
     retirement_insights.append(
-        f"{100 * simulation['reach_target_probability']:.1f}% of simulations reach the "
-        f"withdrawal-rule target by planned retirement, while "
-        f"{100 * simulation['sustain_probability']:.1f}% fund all modeled monthly "
-        f"withdrawals through age {planning_age}. These are separate measures."
+        f"{100 * simulation['sustain_probability']:.1f}% of {int(simulations):,} simulated "
+        f"market-return paths fund every monthly withdrawal through age {planning_age}. "
+        "It is not a guaranteed real-world probability."
     )
     retirement_insights.append(
-        f"To reach the withdrawal-rule portfolio target in roughly 80% of the same "
-        f"simulated paths, the modeled contribution is {money(savings_goal_80['monthly_contribution_needed'])} "
-        f"per month in today's money (an additional {money(savings_goal_80['monthly_increase_needed'])}). "
-        "This target probability is NOT the lifetime spending-success probability."
+        f"For approximately 80% simulated spending success, modeled monthly saving is "
+        f"{money(savings_goal_80['monthly_contribution_needed'])} "
+        f"(an additional {money(savings_goal_80['monthly_increase_needed'])} compared with the current plan)."
     )
     retirement_insights.append(
-        "Simulated results use fixed inflation and independent annual market returns. "
-        "Taxes, fees, pensions and spending changes could change actual outcomes."
+        "The model holds spending and saving constant in today's purchasing power, and ignores "
+        "taxes, fees, pensions, flexible spending, and variable inflation."
     )
     for idx, line in enumerate(retirement_insights):
         if idx == 0 and not lasts_to_horizon:
@@ -690,29 +660,29 @@ with retirement_tab:
 
     with st.expander("Understand the retirement calculations · for your class presentation"):
         st.markdown(r"""
-**1. Nominal to real (inflation-adjusted) return**
+**1. Inflation-adjusted return**
 
 $$r_{real,monthly}=\left(\frac{1+r_{nominal}}{1+i}\right)^{1/12}-1$$
 
-Here annual nominal return $r_{nominal}$ and annual inflation $i$ are decimals. Savings and spending stay constant in **today's purchasing power**.
+Balances, contributions, and spending are expressed in **today's purchasing power**.
 
-**2. Initial withdrawal-rule target**
+**2. Retirement portfolio needed to fund spending**
 
-$$\text{Portfolio target}=\frac{12\times\text{target monthly income}}{\text{withdrawal rate}}$$
+$$\text{Capital needed}=\sum_{m=1}^{N}\frac{\text{monthly spending}}{(1+r_{real,monthly})^m}$$
 
-This is a rule of thumb; it does not establish that the funds will last.
+Here $N$ is the number of retirement months up to the chosen planning age. This assumes a constant return.
 
-**3. How long retirement spending lasts**
+**3. Monthly retirement drawdown**
 
-The model calculates the portfolio balance every month until the selected planning age. It starts withdrawals at retirement and checks whether the balance can fully pay each month's spending. The sustainable constant-return spending amount is the retirement portfolio divided by the present-value factor of all planned monthly withdrawals. This check is distinct from the initial 4% withdrawal-rule target and cannot guarantee outcomes.
+Every month, the portfolio **earns the modeled return**, then pays that month's withdrawal. Savings contributions stop at retirement. The program tracks whether any withdrawal cannot be paid in full.
 
 **4. Monte Carlo simulation**
 
-For each simulated path, the model generates annual investment returns, converts them into monthly real growth, adds deposits until retirement, and models monthly withdrawals afterwards. The **target probability** and **spending sustainability probability** are calculated separately.
+For each path, annual returns vary; monthly contributions continue only until retirement, and withdrawals are paid afterward. The success rate is the share of paths in which **every withdrawal** can be paid up to the chosen age.
 
-**5. Savings goal for ~80% of simulated paths**
+**5. Savings goal for 80% simulated spending success**
 
-For each path, the retirement balance equals the grown starting savings plus monthly deposits multiplied by their accumulation factor. Solving that equation for the contribution gives a required amount for each path. The app takes the 80th percentile of those amounts.
+The app calculates, for each return path, the retirement capital needed to pay every withdrawal and the monthly contribution required to build it. The 80th percentile of these path-by-path contributions is the approximately 80% success savings target. The simulated probability is not a guarantee.
 """)
 
     st.markdown("#### Year-by-year balance projection")
@@ -850,7 +820,7 @@ report_data = generate_pdf_report(
         "current_age": int(current_age), "retirement_age": int(retirement_age),
         "planning_age": int(planning_age), "savings": retirement_savings,
         "contribution": retirement_contribution, "income": target_income,
-        "withdrawal_rate": withdrawal_rate, "return": expected_return,
+        "return": expected_return,
         "inflation": inflation, "planned_balance": planned_balance,
         "target": portfolio_target, "needed": needed_per_month,
         "difference": difference,
