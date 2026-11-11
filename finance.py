@@ -275,3 +275,229 @@ def monte_carlo_projection(
         "median_at_retirement": float(np.median(at_retire)),
         "paths_count": simulations,
     }
+
+
+# -------------------- Financial Future Planner v2 --------------------
+
+def loan_rate_scenarios(
+    principal: float,
+    annual_rate_pct: float,
+    years: int,
+    extra_monthly: float,
+    start_date: date,
+    changes: tuple[float, ...] = (-2.0, -1.0, 0.0, 1.0, 2.0),
+) -> pd.DataFrame:
+    """Hypothetical *new loan* rates; an existing fixed loan does not reprice."""
+    records = []
+    for change in changes:
+        hypothetical_rate = max(0.0, annual_rate_pct + change)
+        schedule = loan_schedule(principal, hypothetical_rate, years, extra_monthly, start_date)
+        stats = loan_stats(schedule, principal)
+        records.append({
+            "Scenario": f"{change:+.0f} pp" if change else "Current rate",
+            "Rate (%)": hypothetical_rate,
+            "Monthly P&I": loan_payment(principal, hypothetical_rate, years),
+            "Total Interest": stats["interest"],
+            "Payoff Months": stats["months"],
+            "Payoff Date": stats["payoff_date"],
+        })
+    return pd.DataFrame(records)
+
+
+def annual_loan_scenario(
+    principal: float, annual_rate_pct: float, years: int, extra_monthly: float, start_date: date
+) -> pd.DataFrame:
+    """Auto-generated payment variations without another user input."""
+    payment = loan_payment(principal, annual_rate_pct, years)
+    if extra_monthly > 0:
+        variations = [
+            ("Standard", 0.0),
+            ("Half selected extra", extra_monthly * 0.5),
+            ("Selected extra", extra_monthly),
+            ("Double selected extra", extra_monthly * 2.0),
+        ]
+    else:
+        variations = [
+            ("Standard", 0.0),
+            ("+5% of scheduled", payment * 0.05),
+            ("+10% of scheduled", payment * 0.10),
+            ("+20% of scheduled", payment * 0.20),
+        ]
+    baseline_interest = loan_stats(loan_schedule(principal, annual_rate_pct, years, 0, start_date), principal)["interest"]
+    rows = []
+    for label, extra in variations:
+        stats = loan_stats(loan_schedule(principal, annual_rate_pct, years, extra, start_date), principal)
+        rows.append({
+            "Scenario": label,
+            "Extra / Month": extra,
+            "Monthly Budget": payment + extra,
+            "Payoff Months": stats["months"],
+            "Total Interest": stats["interest"],
+            "Interest Saved": baseline_interest - stats["interest"],
+            "Payoff Date": stats["payoff_date"],
+        })
+    return pd.DataFrame(rows)
+
+
+def drawdown_portfolio_requirement(
+    monthly_income: float, months: int, monthly_real_return: float
+) -> float:
+    """Capital needed for end-of-month real withdrawals through a fixed horizon.
+
+    This is a deterministic annuity present value, not a safe withdrawal estimate.
+    """
+    if months <= 0 or monthly_income <= 0:
+        return 0.0
+    if monthly_real_return <= -1:
+        raise ValueError("Monthly real return must be greater than -100%.")
+    if abs(monthly_real_return) < 1e-12:
+        return monthly_income * months
+    return monthly_income * (-math.expm1(-months * math.log1p(monthly_real_return))) / monthly_real_return
+
+
+def earliest_feasible_retirement_age(
+    current_age: int,
+    planning_age: int,
+    current_savings: float,
+    monthly_contribution: float,
+    monthly_target_income: float,
+    monthly_real_return: float,
+    withdrawal_rate_pct: float = 4.0,
+) -> dict | None:
+    """Earliest whole age satisfying both initial withdrawal target and *deterministic*
+    funding of target spending through planning_age, with saving until retirement.
+
+    No Monte Carlo guarantee. In particular, post-retirement market volatility is
+    excluded, and the planning horizon is a user choice rather than a lifespan bound.
+    """
+    if current_age >= planning_age or monthly_target_income < 0 or withdrawal_rate_pct <= 0:
+        raise ValueError("Invalid ages, target monthly income or withdrawal rate.")
+    rule_target = 12 * monthly_target_income / (withdrawal_rate_pct / 100)
+    for age in range(current_age + 1, planning_age):
+        months_until = (age - current_age) * 12
+        nest_egg = grow_savings(current_savings, monthly_contribution, months_until, monthly_real_return)
+        months_retired = (planning_age - age) * 12
+        drawdown_target = drawdown_portfolio_requirement(monthly_target_income, months_retired, monthly_real_return)
+        required = max(rule_target, drawdown_target)
+        if nest_egg + 1e-6 >= required:
+            return {
+                "age": age,
+                "portfolio": float(nest_egg),
+                "required_portfolio": float(required),
+                "withdrawal_rule_target": float(rule_target),
+                "deterministic_drawdown_target": float(drawdown_target),
+            }
+    return None
+
+
+def retirement_what_if_scenarios(
+    current_age: int,
+    retirement_age: int,
+    planning_age: int,
+    current_savings: float,
+    monthly_contribution: float,
+    monthly_target_income: float,
+    expected_return_pct: float,
+    inflation_pct: float,
+    withdrawal_rate_pct: float,
+) -> pd.DataFrame:
+    """Change one variable at a time to make scenario changes interpretable."""
+    configs = [
+        ("Base plan", retirement_age, monthly_contribution, expected_return_pct, inflation_pct),
+        ("Investment return -2 pp", retirement_age, monthly_contribution, expected_return_pct - 2, inflation_pct),
+        ("Investment return +2 pp", retirement_age, monthly_contribution, expected_return_pct + 2, inflation_pct),
+        ("Inflation +2 pp", retirement_age, monthly_contribution, expected_return_pct, inflation_pct + 2),
+        ("Savings +10%", retirement_age, monthly_contribution * 1.1, expected_return_pct, inflation_pct),
+    ]
+    if retirement_age - 5 > current_age:
+        configs.append(("Retire 5 years earlier", retirement_age - 5, monthly_contribution, expected_return_pct, inflation_pct))
+    if retirement_age + 5 < planning_age:
+        configs.append(("Retire 5 years later", retirement_age + 5, monthly_contribution, expected_return_pct, inflation_pct))
+
+    target = monthly_target_income * 12 / (withdrawal_rate_pct / 100)
+    rows = []
+    for label, age, contrib, nominal_return, inflation in configs:
+        real = real_monthly_return(nominal_return, inflation)
+        balance = grow_savings(current_savings, contrib, (age - current_age) * 12, real)
+        rows.append({
+            "Scenario": label,
+            "Retirement Age": age,
+            "Monthly Savings": contrib,
+            "Return (%)": nominal_return,
+            "Inflation (%)": inflation,
+            "Portfolio": balance,
+            "Surplus / Shortfall": balance - target,
+            "Monthly Income (rule)": balance * withdrawal_rate_pct / 100 / 12,
+        })
+    return pd.DataFrame(rows)
+
+
+def compare_mortgage_vs_investing(
+    principal: float,
+    mortgage_rate_pct: float,
+    years: int,
+    extra_monthly_budget: float,
+    investment_return_pct: float,
+    start_date: date | None = None,
+) -> dict:
+    """Same fixed cash budget, two strategies, to scheduled mortgage maturity.
+
+    A: make only scheduled payments, invest the remaining cash each month.
+    B: pay extra principal until loan payoff, invest all remaining budget afterward.
+
+    Both have *identical total cash outlays* every month. When the final mortgage
+    payment is smaller, the unused cash is invested in that same month. Investment
+    grows at a fixed effective annual *nominal* return before each end-month deposit.
+    Net financial wealth = investment account - remaining debt (property excluded).
+    """
+    if extra_monthly_budget < 0:
+        raise ValueError("Extra monthly budget cannot be negative.")
+    if investment_return_pct <= -100:
+        raise ValueError("Investment return must be greater than -100%.")
+    payment = loan_payment(principal, mortgage_rate_pct, years)
+    budget = payment + extra_monthly_budget
+    base = loan_schedule(principal, mortgage_rate_pct, years, 0.0, start_date)
+    accelerated = loan_schedule(principal, mortgage_rate_pct, years, extra_monthly_budget, start_date)
+    n = years * 12
+    monthly_factor = (1.0 + investment_return_pct / 100) ** (1.0 / 12)
+    invest_balance, paydown_balance = 0.0, 0.0
+    records = [{
+        "Month": 0,
+        "Invest Strategy Portfolio": 0.0,
+        "Prepay Strategy Portfolio": 0.0,
+        "Invest Strategy Debt": principal,
+        "Prepay Strategy Debt": principal,
+        "Invest Strategy Net Wealth": -principal,
+        "Prepay Strategy Net Wealth": -principal,
+    }]
+    for i in range(n):
+        regular_paid = float(base.iloc[i]["Total Payment"]) if i < len(base) else 0.0
+        extra_paid = float(accelerated.iloc[i]["Total Payment"]) if i < len(accelerated) else 0.0
+        invest_balance = invest_balance * monthly_factor + max(0.0, budget - regular_paid)
+        paydown_balance = paydown_balance * monthly_factor + max(0.0, budget - extra_paid)
+        regular_debt = float(base.iloc[i]["Ending Balance"]) if i < len(base) else 0.0
+        prepay_debt = float(accelerated.iloc[i]["Ending Balance"]) if i < len(accelerated) else 0.0
+        records.append({
+            "Month": i + 1,
+            "Invest Strategy Portfolio": invest_balance,
+            "Prepay Strategy Portfolio": paydown_balance,
+            "Invest Strategy Debt": regular_debt,
+            "Prepay Strategy Debt": prepay_debt,
+            "Invest Strategy Net Wealth": invest_balance - regular_debt,
+            "Prepay Strategy Net Wealth": paydown_balance - prepay_debt,
+        })
+    table = pd.DataFrame(records)
+    diff = invest_balance - paydown_balance
+    threshold = (1 + mortgage_rate_pct / 1200) ** 12 * 100 - 100
+    return {
+        "monthly_budget": budget,
+        "comparison_extra": extra_monthly_budget,
+        "invest_portfolio": invest_balance,
+        "prepay_portfolio": paydown_balance,
+        "difference": diff,
+        "winner": "Invest extra" if diff > 0.01 else "Prepay loan" if diff < -0.01 else "Approximately tied",
+        "breakeven_effective_annual_pct": threshold,
+        "interest_saved_by_prepaying": float(base["Interest"].sum() - accelerated["Interest"].sum()),
+        "table": table,
+        "horizon_months": n,
+    }

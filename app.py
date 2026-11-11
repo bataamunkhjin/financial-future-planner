@@ -6,7 +6,6 @@ Run: python -m streamlit run app.py
 from __future__ import annotations
 
 from datetime import date
-import io
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -22,7 +21,13 @@ from finance import (
     real_monthly_return,
     required_monthly_contribution,
     retirement_projection,
+    loan_rate_scenarios,
+    annual_loan_scenario,
+    earliest_feasible_retirement_age,
+    retirement_what_if_scenarios,
+    compare_mortgage_vs_investing,
 )
+from report import generate_pdf_report
 
 
 st.set_page_config(
@@ -201,43 +206,71 @@ with loan_tab:
         st.plotly_chart(plot_layout(fig, y_label=f"Annual payment ({CURRENCY})"), use_container_width=True)
 
     st.markdown("#### Automatic extra-payment scenarios")
-    if extra_monthly > 0:
-        modest_extra = extra_monthly / 2
-        aggressive_extra = extra_monthly
-        scenario_names = ["Standard", "Half selected extra", "Your selected extra"]
-    else:
-        modest_extra = scheduled_payment * 0.05
-        aggressive_extra = scheduled_payment * 0.10
-        scenario_names = ["Standard", "+5% of scheduled", "+10% of scheduled"]
+    extra_scenarios = annual_loan_scenario(
+        loan_amount, interest_rate, loan_years, extra_monthly, loan_start
+    )
+    display_extra = extra_scenarios.copy()
+    for field in ["Extra / Month", "Monthly Budget", "Total Interest", "Interest Saved"]:
+        display_extra[field] = display_extra[field].map(lambda v: money(v, 2))
+    display_extra["Payoff Time"] = extra_scenarios["Payoff Months"].map(months_as_text)
+    display_extra["Payoff Date"] = display_extra["Payoff Date"].astype(str)
+    st.dataframe(
+        display_extra[["Scenario", "Extra / Month", "Monthly Budget", "Payoff Time",
+                       "Interest Saved", "Total Interest", "Payoff Date"]],
+        hide_index=True, use_container_width=True,
+    )
 
-    scenarios = []
-    for label, extra in zip(scenario_names, [0, modest_extra, aggressive_extra]):
-        s = loan_stats(loan_schedule(loan_amount, interest_rate, loan_years, extra, loan_start), loan_amount)
-        scenarios.append({
-            "Scenario": label,
-            "Extra / month": money(extra, 2),
-            "Monthly loan outflow": money(scheduled_payment + extra, 2),
-            "Payoff time": months_as_text(s["months"]),
-            "Total interest": money(s["interest"]),
-            "Interest saved": money(max(0.0, standard_stats["interest"] - s["interest"])),
-            "Payoff date": s["payoff_date"].strftime("%b %Y"),
-        })
-    st.dataframe(pd.DataFrame(scenarios), hide_index=True, use_container_width=True)
+    st.markdown("#### What if interest rates were different?")
+    rate_scenarios = loan_rate_scenarios(
+        loan_amount, interest_rate, loan_years, extra_monthly, loan_start
+    )
+    show_rates = rate_scenarios.copy()
+    show_rates["Annual Rate"] = show_rates["Rate (%)"].map(lambda x: f"{x:.2f}%")
+    show_rates["Monthly P&I"] = show_rates["Monthly P&I"].map(lambda x: money(x, 2))
+    show_rates["Total Interest"] = show_rates["Total Interest"].map(money)
+    show_rates["Payoff Date"] = show_rates["Payoff Date"].astype(str)
+    st.dataframe(
+        show_rates[["Scenario", "Annual Rate", "Monthly P&I", "Total Interest", "Payoff Date"]],
+        hide_index=True, use_container_width=True,
+    )
+    st.caption(
+        "Rate scenarios are hypothetical quotes for a *new* fixed-rate loan. "
+        "Existing fixed-rate mortgages do not automatically reprice when interest rates change. "
+        "The entered extra payment stays unchanged in each scenario."
+    )
 
     st.markdown("#### Automatic loan insights")
+    loan_insights = []
     if extra_monthly > 0:
-        st.success(
-            f"Adding {money(extra_monthly)} every month could save about {money(saved_interest)} "
-            f"in interest and pay the loan off {months_as_text(months_saved)} earlier."
+        loan_insights.append(
+            f"Putting {money(extra_monthly)} toward loan principal monthly saves "
+            f"about {money(saved_interest)} in total interest and pays off "
+            f"the loan {months_as_text(months_saved)} earlier."
         )
     else:
-        st.info(
-            f"Try an extra payment of {money(aggressive_extra, 2)} per month "
-            "(10% of the scheduled payment) and compare the savings above."
+        suggested_extra = scheduled_payment * 0.10
+        suggested_stats = loan_stats(
+            loan_schedule(loan_amount, interest_rate, loan_years, suggested_extra, loan_start), loan_amount
         )
+        loan_insights.append(
+            f"Adding a hypothetical 10% extra payment ({money(suggested_extra)}/month) "
+            f"could save {money(standard_stats['interest'] - suggested_stats['interest'])} in interest."
+        )
+    loan_insights.append(
+        f"Standard loan interest totals {money(standard_stats['interest'])}, "
+        f"or {standard_stats['interest_to_principal'] * 100:.1f}% of the borrowed principal."
+    )
     if interest_rate >= 12:
-        st.warning("This is a high nominal interest-rate assumption. Even modest extra principal payments can have a large effect; consider affordability and cash reserves too.")
-    st.caption("Assumes a fixed rate, monthly compounding, no fees or prepayment penalties, and no missed payments.")
+        loan_insights.append(
+            "The assumed nominal borrowing rate is high; prioritize affordable payments "
+            "and emergency cash reserves before increasing prepayments."
+        )
+    for index, item in enumerate(loan_insights):
+        (st.success if index == 0 and extra_monthly > 0 else st.info)(item)
+    st.caption(
+        "All loan results assume a fixed rate, monthly interest, no fees or prepayment "
+        "penalties, and no missed payments. Extra payments reduce principal."
+    )
 
     st.markdown("#### Monthly amortization schedule")
     display_schedule = chosen.copy()
@@ -321,9 +354,19 @@ with retirement_tab:
     projected_contributions = retirement_savings + retirement_contribution * months_to_retire
     investment_growth = planned_balance - projected_contributions
     supported_income = planned_balance * (withdrawal_rate / 100) / 12
-    earliest_age = earliest_target_age(
+    heuristic_target_age = earliest_target_age(
         int(current_age), retirement_savings, retirement_contribution,
         portfolio_target, real_rate, max_age=int(planning_age),
+    )
+    feasible_retirement = earliest_feasible_retirement_age(
+        int(current_age), int(planning_age), retirement_savings, retirement_contribution,
+        target_income, real_rate, withdrawal_rate,
+    )
+    earliest_age = feasible_retirement["age"] if feasible_retirement else None
+    retirement_scenarios = retirement_what_if_scenarios(
+        int(current_age), int(retirement_age), int(planning_age),
+        retirement_savings, retirement_contribution, target_income,
+        expected_return, inflation, withdrawal_rate,
     )
     projection, depletion_age = retirement_projection(
         int(current_age), int(retirement_age), int(planning_age),
@@ -349,11 +392,18 @@ with retirement_tab:
         j1.metric("Monthly saving needed", money(needed_per_month))
         j2.metric("Additional saving / month", money(max(0.0, needed_per_month - retirement_contribution)))
         j3.metric("Estimated investment growth", money(investment_growth))
-        j4.metric("Earliest age reaching target", str(earliest_age) if earliest_age is not None else f"Not by {planning_age}")
+        j4.metric("Earliest modeled eligible age", str(earliest_age) if earliest_age is not None else f"Not by {planning_age}")
         st.caption(
             f"All amounts shown in today's {currency_choice.split(' ')[0]} purchasing power. "
             f"Portfolio target = target income × 12 ÷ {withdrawal_rate:.2f}% initial withdrawal rate. "
-            "This is a rule of thumb, not a guarantee of lasting income."
+            "The earliest modeled eligible age requires both this withdrawal-rule target and "
+            "enough funds to cover target withdrawals through the planning age under a constant return. "
+            "Neither measure guarantees successful retirement."
+        )
+        st.caption(
+            f"Withdrawal-rule target alone is first reached at age "
+            f"{heuristic_target_age if heuristic_target_age is not None else 'beyond the planning horizon'}. "
+            "The more conservative eligibility test also checks constant-return withdrawal funding."
         )
 
     st.markdown("#### Retirement trajectory and uncertainty")
@@ -394,36 +444,57 @@ with retirement_tab:
         f"Around age {depletion_age:.1f}" if depletion_age is not None else f"Not through age {planning_age}",
     )
 
-    st.markdown("#### Automatically generated retirement-age comparison")
-    comparisons = []
-    for age in sorted({age for age in [retirement_age - 5, retirement_age, retirement_age + 5] if current_age < age <= planning_age}):
-        balance = grow_savings(retirement_savings, retirement_contribution, 12 * (age - current_age), real_rate)
-        need = required_monthly_contribution(retirement_savings, 12 * (age - current_age), portfolio_target, real_rate)
-        comparisons.append({
-            "Retirement age": age,
-            "Projected real portfolio": money(balance),
-            "Portfolio gap": money(balance - portfolio_target),
-            "Needed monthly saving": money(need),
-            "Starting monthly income · withdrawal rule": money(balance * withdrawal_rate / 100 / 12),
-        })
-    st.dataframe(pd.DataFrame(comparisons), hide_index=True, use_container_width=True)
+    st.markdown("#### Automatic retirement what-if scenarios")
+    show_retirement_scenarios = retirement_scenarios.copy()
+    for col in ["Monthly Savings", "Portfolio", "Surplus / Shortfall", "Monthly Income (rule)"]:
+        show_retirement_scenarios[col] = show_retirement_scenarios[col].map(money)
+    for col in ["Return (%)", "Inflation (%)"]:
+        show_retirement_scenarios[col] = show_retirement_scenarios[col].map(lambda x: f"{x:.1f}%")
+    st.dataframe(show_retirement_scenarios, use_container_width=True, hide_index=True)
+    st.caption(
+        "Each what-if scenario changes only one assumption from your base plan. "
+        "Portfolio values and target income are in today's purchasing power; "
+        "return and inflation changes are in percentage points (pp), not percentages of the rate."
+    )
 
-    st.markdown("#### Automatically generated financial insights")
+    st.markdown("#### Personalized retirement insights")
+    retirement_insights = []
     if difference >= 0:
-        st.success(
-            f"At the assumed constant return, you're on track to reach the {withdrawal_rate:.2f}% "
-            f"withdrawal-rule target, with a projected cushion of {money(difference)}."
+        retirement_insights.append(
+            f"At the assumed constant return, your projected portfolio exceeds "
+            f"the {withdrawal_rate:.2f}% withdrawal-rule target by {money(difference)}."
         )
     else:
-        st.warning(
-            f"At the assumed constant return, your projected portfolio falls short by {money(-difference)}. "
-            f"Raising monthly savings by about {money(max(0.0, needed_per_month - retirement_contribution))} "
-            "in today's money could close that gap under the same assumptions."
+        retirement_insights.append(
+            f"At the assumed constant return, your plan falls short of the withdrawal-rule "
+            f"target by {money(-difference)}. Increasing real monthly savings by "
+            f"approximately {money(max(0.0, needed_per_month - retirement_contribution))} "
+            "may close that modeled gap."
         )
-    if simulation["sustain_probability"] < 0.70:
-        st.info("Simulated withdrawal sustainability is below 70%. Try a later retirement age, a lower spending target, or higher monthly contributions.")
-    else:
-        st.info("Review both the withdrawal-rule target and simulated withdrawal sustainability: meeting one metric doesn't ensure the other.")
+    retirement_insights.append(
+        (f"The earliest modeled eligible retirement age is {earliest_age} under "
+         f"the constant-return and age-{planning_age} spending assumptions."
+         if earliest_age is not None else
+         f"No whole-year retirement age through {planning_age-1} meets both modeled "
+         "funding tests with current contributions.")
+    )
+    retirement_insights.append(
+        f"{100 * simulation['reach_target_probability']:.1f}% of simulations reach the "
+        f"withdrawal-rule target by planned retirement, while "
+        f"{100 * simulation['sustain_probability']:.1f}% fund all modeled monthly "
+        f"withdrawals through age {planning_age}. These are separate measures."
+    )
+    retirement_insights.append(
+        "Simulated results use fixed inflation and independent annual market returns. "
+        "Taxes, fees, pensions and spending changes could change actual outcomes."
+    )
+    for idx, line in enumerate(retirement_insights):
+        if idx == 0 and difference < 0:
+            st.warning(line)
+        elif idx == 0:
+            st.success(line)
+        else:
+            st.info(line)
 
     st.markdown("#### Year-by-year balance projection")
     st.dataframe(
@@ -457,6 +528,136 @@ with retirement_tab:
         "or changing spending patterns. Simulations assume independent annual lognormal returns with fixed "
         "arithmetic mean and volatility. Historical returns and future results may differ substantially."
     )
+
+# ───────────────── LINKED MORTGAGE VS INVESTING ─────────────────
+# Running both tab calculations before this section allows us to reuse the
+# Retirement tab's *existing* expected-return assumption: no fifth loan input.
+comparison_extra = extra_monthly if extra_monthly > 0 else scheduled_payment * 0.05
+invest_comparison = compare_mortgage_vs_investing(
+    loan_amount, interest_rate, loan_years, comparison_extra, expected_return, loan_start
+)
+investment_insights = [
+    f"With the same {money(invest_comparison['monthly_budget'])} monthly cash budget, "
+    f"the modeled {invest_comparison['winner'].lower()} strategy finishes "
+    f"{loan_years} years later with an advantage of {money(abs(invest_comparison['difference']))} "
+    "in nominal financial assets.",
+    f"The mortgage's effective annual borrowing rate is about "
+    f"{invest_comparison['breakeven_effective_annual_pct']:.2f}% versus the assumed "
+    f"{expected_return:.2f}% annual investment return. Both are model assumptions, "
+    "and investment results are uncertain.",
+]
+
+with loan_tab:
+    st.markdown("#### Mortgage prepayment versus investing")
+    st.markdown(
+        "**Should you put spare monthly cash toward your mortgage or invest it instead?** "
+        "This comparison holds your total monthly cash budget constant under both strategies."
+    )
+    if extra_monthly == 0:
+        st.info(
+            f"Your extra payment is zero, so this example uses a hypothetical "
+            f"5% of the scheduled payment ({money(comparison_extra)} per month) "
+            "as money you could either invest or pay toward principal."
+        )
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Monthly budget in both strategies", money(invest_comparison["monthly_budget"]))
+    c2.metric("Invest extra · final portfolio", money(invest_comparison["invest_portfolio"]))
+    c3.metric("Prepay first · final portfolio", money(invest_comparison["prepay_portfolio"]))
+    c4.metric("Modeled advantage", money(abs(invest_comparison["difference"])), invest_comparison["winner"])
+
+    wealth = invest_comparison["table"]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=wealth["Month"], y=wealth["Invest Strategy Net Wealth"],
+        name="Invest spare cash", line=dict(color="#6366f1", width=3)
+    ))
+    fig.add_trace(go.Scatter(
+        x=wealth["Month"], y=wealth["Prepay Strategy Net Wealth"],
+        name="Prepay, then invest", line=dict(color="#10b981", width=3)
+    ))
+    fig.update_xaxes(title="Months from loan start")
+    st.plotly_chart(
+        plot_layout(fig, height=380, y_label=f"Net financial wealth ({CURRENCY})"),
+        use_container_width=True,
+    )
+    st.caption(
+        "Net financial wealth = investment assets minus unpaid loan principal; "
+        "home value is excluded because both strategies own the same property. "
+        f"Investment return: {expected_return:.2f}% nominal/year, taken from the "
+        "Retirement tab's Advanced assumptions. The same monthly loan-plus-spare-cash "
+        "budget is allocated under both strategies, and any unused final payment is invested. "
+        f"The comparison ends after {loan_years} years, when both mortgages are paid off. "
+        "Fixed return, no fees or taxes, no loan prepayment fee or investment risk modeling. "
+        "Investing has market risk and is not guaranteed to outperform paying down debt."
+    )
+    for insight in investment_insights:
+        st.info(insight)
+    with st.expander("See month-by-month mortgage vs. investing results"):
+        st.dataframe(wealth.style.format({
+            col: "{:,.2f}" for col in wealth.select_dtypes(include="number").columns
+            if col != "Month"
+        }), hide_index=True, use_container_width=True, height=300)
+        st.download_button(
+            "⬇ Download strategy comparison CSV",
+            wealth.to_csv(index=False).encode("utf-8-sig"),
+            file_name="mortgage_vs_investing.csv", mime="text/csv",
+        )
+
+# ─────────────────── DOWNLOADABLE COMBINED PDF ───────────────────
+report_data = generate_pdf_report(
+    code=currency_choice.split(" ")[0],
+    loan={
+        "amount": loan_amount, "rate": interest_rate, "years": loan_years,
+        "extra": extra_monthly, "payment": scheduled_payment,
+        "start_date": loan_start, "payoff_date": chosen_stats["payoff_date"],
+        "standard_interest": standard_stats["interest"], "interest_saved": saved_interest,
+        "months_saved": months_saved,
+    },
+    retirement={
+        "current_age": int(current_age), "retirement_age": int(retirement_age),
+        "planning_age": int(planning_age), "savings": retirement_savings,
+        "contribution": retirement_contribution, "income": target_income,
+        "withdrawal_rate": withdrawal_rate, "return": expected_return,
+        "inflation": inflation, "planned_balance": planned_balance,
+        "target": portfolio_target, "needed": needed_per_month,
+        "difference": difference,
+        "earliest_age": earliest_age if earliest_age is not None else "Not found",
+        "simulations": int(simulations),
+        "reach_probability": simulation["reach_target_probability"],
+        "sustain_probability": simulation["sustain_probability"],
+    },
+    loan_rate_sensitivity=rate_scenarios,
+    loan_extra_sensitivity=extra_scenarios,
+    retirement_sensitivity=retirement_scenarios,
+    investing=invest_comparison,
+    base_loan_schedule=standard,
+    chosen_loan_schedule=chosen,
+    retirement_projection_df=projection,
+    loan_insights=loan_insights,
+    retirement_insights=retirement_insights,
+    investment_insights=investment_insights,
+)
+with st.sidebar:
+    st.divider()
+    st.subheader("📄 Financial report")
+    st.download_button(
+        "⬇ Download combined PDF",
+        data=report_data,
+        file_name="financial_future_planner_report.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
+    st.caption("Includes both tabs, loan and retirement what-if scenarios, linked mortgage/investing comparison and insights.")
+
+with retirement_tab:
+    st.markdown("#### Download your financial report")
+    st.download_button(
+        "⬇ Download full loan + retirement PDF report",
+        data=report_data,
+        file_name="financial_future_planner_report.pdf",
+        mime="application/pdf",
+    )
+
 
 st.divider()
 st.caption("Financial Future Planner • Streamlit class project • Educational estimates only")

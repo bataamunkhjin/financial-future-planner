@@ -1,0 +1,10 @@
+# Python caches and local environment
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+.streamlit/secrets.toml
+# Generated sample or user reports
+*financial_report.pdf
