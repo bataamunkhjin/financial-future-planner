@@ -6,6 +6,8 @@ Run: python -m streamlit run app.py
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal, InvalidOperation
+import re
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -81,6 +83,75 @@ def money(value: float, decimals: int = 0) -> str:
     return f"{CURRENCY}{value:,.0f}"
 
 
+# Money fields are text inputs because Streamlit number_input's format must be numeric.
+# Comma grouping is normalized in an on_change callback BEFORE the app reruns.
+_MONEY_FORMAT = re.compile(r"(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{0,2})?\Z")
+
+
+def parse_money_text(text: str, min_value: float = 0.0,
+                     max_value: float = 10_000_000_000_000.0) -> Decimal:
+    """Validate a monetary entry, accepting correct grouping and up to two decimals."""
+    value_text = str(text).strip()
+    if not _MONEY_FORMAT.fullmatch(value_text):
+        raise ValueError("Enter a number such as 5,000,000 or 5,000,000.50 (up to 2 decimals).")
+    try:
+        number = Decimal(value_text.replace(",", ""))
+    except InvalidOperation as exc:
+        raise ValueError("Enter a valid number.") from exc
+    if not number.is_finite() or not Decimal(str(min_value)) <= number <= Decimal(str(max_value)):
+        raise ValueError(f"Enter an amount between {min_value:,.0f} and {max_value:,.0f}.")
+    return number
+
+
+def format_money_text(value: Decimal | float, min_decimals: int = 0) -> str:
+    """Format without discarding user-entered cents; MNT defaults to whole units."""
+    number = Decimal(str(value))
+    explicit_places = max(0, -number.as_tuple().exponent)
+    # Whole tugrik defaults shouldn't display trailing .0 or .00, but any
+    # nonzero fractional amount retains its supplied decimal precision.
+    places = min_decimals if number == number.to_integral_value() else max(min_decimals, explicit_places)
+    if places > 2:
+        raise ValueError("Monetary values can contain at most two decimal places.")
+    return f"{number:,.{places}f}"
+
+
+def _normalize_money_input(key: str, value_key: str, error_key: str,
+                           min_value: float, max_value: float,
+                           min_decimals: int) -> None:
+    """Called by Streamlit before rerendering, so editing the widget key is safe."""
+    try:
+        amount = parse_money_text(st.session_state[key], min_value, max_value)
+    except ValueError as exc:
+        st.session_state[error_key] = str(exc)
+        return  # Keep last valid value and clearly show the error beside the field.
+    st.session_state[key] = format_money_text(amount, min_decimals)
+    st.session_state[value_key] = float(amount)
+    st.session_state.pop(error_key, None)
+
+
+def money_input(label: str, *, name: str, default: float, min_value: float = 0.0,
+                max_value: float = 10_000_000_000_000.0) -> float:
+    """Grouped text input with per-currency state and a safe numeric result."""
+    code = currency_choice.split(" ")[0]
+    key = f"money_{code}_{name}"
+    value_key = f"{key}_last_valid"
+    error_key = f"{key}_error"
+    min_decimals = 0 if IS_MNT else 2
+    if key not in st.session_state:
+        st.session_state[key] = format_money_text(default, min_decimals)
+        st.session_state[value_key] = float(default)
+    st.text_input(
+        label, key=key,
+        help="Commas are added when you press Enter or click outside. You can type with or without commas.",
+        on_change=_normalize_money_input,
+        args=(key, value_key, error_key, min_value, max_value, min_decimals),
+    )
+    if error_key in st.session_state:
+        st.error(f"{st.session_state[error_key]} Using the last valid amount: "
+                 f"{format_money_text(st.session_state[value_key], min_decimals)}")
+    return float(st.session_state[value_key])
+
+
 def months_as_text(months: int) -> str:
     years, leftover = divmod(int(months), 12)
     return f"{years}y {leftover}m" if years else f"{leftover}m"
@@ -115,17 +186,15 @@ loan_tab, retirement_tab = st.tabs(["🏠 Mortgage / Loan Planner", "🌱 Retire
 # ────────────────────────── LOAN TAB ──────────────────────────
 with loan_tab:
     st.subheader("What will your loan really cost?")
-    st.caption("Four essential inputs. All calculations update automatically.")
+    st.caption("Four essential inputs. Monetary fields add commas after pressing Enter or clicking outside.")
 
     with st.container(border=True):
         a, b, c, d = st.columns(4)
         with a:
-            loan_amount = st.number_input(
-                f"Loan amount ({CURRENCY})",
-                min_value=1.0,
-                max_value=1_000_000_000_000.0,
-                value=250_000_000.0 if IS_MNT else 150_000.0,
-                step=5_000_000.0 if IS_MNT else 1_000.0,
+            loan_amount = money_input(
+                f"Loan amount ({CURRENCY})", name="loan_amount",
+                min_value=1.0, max_value=1_000_000_000_000.0,
+                default=250_000_000.0 if IS_MNT else 150_000.0,
             )
         with b:
             interest_rate = st.number_input(
@@ -135,11 +204,10 @@ with loan_tab:
         with c:
             loan_years = st.slider("Loan term (years)", min_value=1, max_value=40, value=20 if IS_MNT else 30)
         with d:
-            extra_monthly = st.number_input(
-                f"Extra monthly payment ({CURRENCY})", min_value=0.0,
-                max_value=10_000_000_000.0,
-                value=300_000.0 if IS_MNT else 200.0,
-                step=50_000.0 if IS_MNT else 25.0,
+            extra_monthly = money_input(
+                f"Extra monthly payment ({CURRENCY})", name="extra_monthly",
+                min_value=0.0, max_value=10_000_000_000.0,
+                default=300_000.0 if IS_MNT else 200.0,
             )
 
         with st.expander("Advanced mortgage costs and loan start date (optional)"):
@@ -151,11 +219,11 @@ with loan_tab:
             with x:
                 loan_start = st.date_input("Loan starts", value=date.today(), min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
             with y:
-                monthly_tax = st.number_input(f"Property tax / month ({CURRENCY})", min_value=0.0, value=0.0)
+                monthly_tax = money_input(f"Property tax / month ({CURRENCY})", name="monthly_tax", default=0.0)
             with z:
-                monthly_insurance = st.number_input(f"Insurance / month ({CURRENCY})", min_value=0.0, value=0.0)
+                monthly_insurance = money_input(f"Insurance / month ({CURRENCY})", name="monthly_insurance", default=0.0)
             with w:
-                monthly_pmi = st.number_input(f"PMI / month ({CURRENCY})", min_value=0.0, value=0.0)
+                monthly_pmi = money_input(f"PMI / month ({CURRENCY})", name="monthly_pmi", default=0.0)
             st.caption("PMI is held constant until payoff in this simplified model; actual cancellation rules differ.")
 
     scheduled_payment = loan_payment(loan_amount, interest_rate, loan_years)
@@ -328,7 +396,7 @@ This is the mathematical break-even fixed return **before** investment taxes, fe
 # ─────────────────────── RETIREMENT TAB ───────────────────────
 with retirement_tab:
     st.subheader("Will your savings support retirement?")
-    st.caption("Five essential inputs. All income, savings, and results are in today's purchasing power.")
+    st.caption("Five essential inputs. Monetary fields add commas after pressing Enter or clicking outside; all values are in today's purchasing power.")
 
     with st.container(border=True):
         c1, c2, c3, c4, c5 = st.columns(5)
@@ -337,25 +405,22 @@ with retirement_tab:
         with c2:
             retirement_age = st.number_input("Retirement age", min_value=int(current_age) + 1, max_value=90, value=max(60, int(current_age) + 1), step=1)
         with c3:
-            retirement_savings = st.number_input(
-                f"Current savings ({CURRENCY})", min_value=0.0,
-                max_value=10_000_000_000_000.0,
-                value=30_000_000.0 if IS_MNT else 10_000.0,
-                step=1_000_000.0 if IS_MNT else 1_000.0,
+            retirement_savings = money_input(
+                f"Current savings ({CURRENCY})", name="retirement_savings",
+                min_value=0.0, max_value=10_000_000_000_000.0,
+                default=30_000_000.0 if IS_MNT else 10_000.0,
             )
         with c4:
-            retirement_contribution = st.number_input(
-                f"Monthly savings ({CURRENCY})", min_value=0.0,
-                max_value=10_000_000_000.0,
-                value=1_000_000.0 if IS_MNT else 300.0,
-                step=100_000.0 if IS_MNT else 50.0,
+            retirement_contribution = money_input(
+                f"Monthly savings ({CURRENCY})", name="retirement_contribution",
+                min_value=0.0, max_value=10_000_000_000.0,
+                default=1_000_000.0 if IS_MNT else 300.0,
             )
         with c5:
-            target_income = st.number_input(
-                f"Target monthly income ({CURRENCY})", min_value=1.0,
-                max_value=10_000_000_000.0,
-                value=3_000_000.0 if IS_MNT else 1_500.0,
-                step=100_000.0 if IS_MNT else 100.0,
+            target_income = money_input(
+                f"Target monthly income ({CURRENCY})", name="target_income",
+                min_value=1.0, max_value=10_000_000_000.0,
+                default=3_000_000.0 if IS_MNT else 1_500.0,
             )
 
         with st.expander("Advanced retirement assumptions (optional)"):
