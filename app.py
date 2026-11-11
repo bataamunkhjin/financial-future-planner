@@ -30,6 +30,7 @@ from finance import (
     compare_mortgage_vs_investing,
     loan_payoff_milestones,
     simulated_savings_goal,
+    drawdown_portfolio_requirement,
     mortgage_investing_return_scenarios,
 )
 from report import generate_pdf_report
@@ -130,7 +131,8 @@ def _normalize_money_input(key: str, value_key: str, error_key: str,
 
 
 def money_input(label: str, *, name: str, default: float, min_value: float = 0.0,
-                max_value: float = 10_000_000_000_000.0) -> float:
+                max_value: float = 10_000_000_000_000.0,
+                help_text: str | None = None) -> float:
     """Grouped text input with per-currency state and a safe numeric result."""
     code = currency_choice.split(" ")[0]
     key = f"money_{code}_{name}"
@@ -142,7 +144,8 @@ def money_input(label: str, *, name: str, default: float, min_value: float = 0.0
         st.session_state[value_key] = float(default)
     st.text_input(
         label, key=key,
-        help="Commas are added when you press Enter or click outside. You can type with or without commas.",
+        help=(help_text + " " if help_text else "") +
+             "Commas are added when you press Enter or click outside. You can type with or without commas.",
         on_change=_normalize_money_input,
         args=(key, value_key, error_key, min_value, max_value, min_decimals),
     )
@@ -418,9 +421,10 @@ with retirement_tab:
             )
         with c5:
             target_income = money_input(
-                f"Target monthly income ({CURRENCY})", name="target_income",
+                f"Target income ({CURRENCY})", name="target_income",
                 min_value=1.0, max_value=10_000_000_000.0,
-                default=3_000_000.0 if IS_MNT else 1_500.0,
+                default=10_000_000.0 if IS_MNT else 1_500.0,
+                help_text="The monthly income you want during retirement, in today's purchasing power.",
             )
 
         with st.expander("Advanced retirement assumptions (optional)"):
@@ -437,7 +441,8 @@ with retirement_tab:
             with v5:
                 planning_age = st.number_input(
                     "Plan through age", min_value=int(retirement_age) + 1,
-                    max_value=105, value=max(90, int(retirement_age) + 1), step=1,
+                    max_value=110, value=max(100, int(retirement_age) + 1), step=1,
+                    help="Choose how long you want your savings to support retirement spending. This does not predict how long you will live.",
                 )
             simulations = st.select_slider("Monte Carlo scenarios", options=[250, 500, 1000, 2000], value=1000)
             st.caption(
@@ -485,6 +490,53 @@ with retirement_tab:
         inflation, volatility, simulations=int(simulations),
         target_probability=0.80, seed=42,
     )
+
+    # This spending-through-planning-age check is separate from the 4% rule.
+    # It uses the same real monthly return and monthly withdrawals as the
+    # constant-return retirement projection, avoiding inconsistent assumptions.
+    retirement_months = (int(planning_age) - int(retirement_age)) * 12
+    drawdown_capital_needed = drawdown_portfolio_requirement(
+        target_income, retirement_months, real_rate,
+    )
+    monthly_income_to_horizon = (
+        planned_balance / drawdown_portfolio_requirement(1.0, retirement_months, real_rate)
+        if retirement_months > 0 else 0.0
+    )
+    monthly_saving_to_horizon = required_monthly_contribution(
+        retirement_savings, months_to_retire, drawdown_capital_needed, real_rate,
+    )
+    additional_saving_to_horizon = max(0.0, monthly_saving_to_horizon - retirement_contribution)
+    lasts_to_horizon = depletion_age is None
+
+    st.markdown(f"#### Can you fund {money(target_income)}/month through age {planning_age}?")
+    with st.container(border=True):
+        if lasts_to_horizon:
+            st.success(
+                f"Yes under the constant-return assumptions: your balance supports "
+                f"{money(target_income)} per month from age {retirement_age} through age {planning_age}."
+            )
+        else:
+            st.warning(
+                f"Not with the current savings plan. At {money(target_income)} per month "
+                f"from age {retirement_age}, the constant-return model estimates "
+                f"savings run short around age {depletion_age:.1f}, before age {planning_age}."
+            )
+        life1, life2, life3, life4 = st.columns(4)
+        life1.metric(f"Money lasts to {planning_age}?", "Yes" if lasts_to_horizon else "No")
+        life2.metric("Estimated funds run out", f"Age {depletion_age:.1f}" if depletion_age is not None else f"Beyond {planning_age}")
+        life3.metric(f"Monthly spending sustainable to {planning_age}", money(monthly_income_to_horizon))
+        life4.metric("Extra saving/month for this goal", money(additional_saving_to_horizon))
+        st.caption(
+            f"To fund the full {money(target_income)}/month through age {planning_age} under a "
+            f"constant real return, the model estimates a portfolio of {money(drawdown_capital_needed)} "
+            f"at retirement and total monthly saving of {money(monthly_saving_to_horizon)} "
+            f"before retirement. This is a fixed-horizon drawdown calculation, not the 4% withdrawal rule."
+        )
+        st.caption(
+            f"In {int(simulations):,} illustrative variable-return simulations, "
+            f"{simulation['sustain_probability']:.1%} fully funded those withdrawals through age {planning_age}. "
+            "That is a model estimate, not a guarantee; living to age 100 is not predicted."
+        )
 
     st.markdown("#### Retirement snapshot")
     r1, r2, r3, r4 = st.columns(4)
@@ -580,6 +632,19 @@ with retirement_tab:
 
     st.markdown("#### Personalized retirement insights")
     retirement_insights = []
+    if lasts_to_horizon:
+        retirement_insights.append(
+            f"Under a constant real return, the current plan funds {money(target_income)} "
+            f"per month from age {retirement_age} through age {planning_age}. "
+            f"The simulated share funding all withdrawals is {simulation['sustain_probability']:.1%}."
+        )
+    else:
+        retirement_insights.append(
+            f"At {money(target_income)} per month, constant-return savings run short around "
+            f"age {depletion_age:.1f}, before age {planning_age}. "
+            f"An additional {money(additional_saving_to_horizon)} per month before retirement "
+            "would meet the fixed-return drawdown calculation, but does not ensure success under market volatility."
+        )
     if difference >= 0:
         retirement_insights.append(
             f"At the assumed constant return, your projected portfolio exceeds "
@@ -616,7 +681,7 @@ with retirement_tab:
         "Taxes, fees, pensions and spending changes could change actual outcomes."
     )
     for idx, line in enumerate(retirement_insights):
-        if idx == 0 and difference < 0:
+        if idx == 0 and not lasts_to_horizon:
             st.warning(line)
         elif idx == 0:
             st.success(line)
@@ -637,11 +702,15 @@ $$\text{Portfolio target}=\frac{12\times\text{target monthly income}}{\text{with
 
 This is a rule of thumb; it does not establish that the funds will last.
 
-**3. Monte Carlo simulation**
+**3. How long retirement spending lasts**
+
+The model calculates the portfolio balance every month until the selected planning age. It starts withdrawals at retirement and checks whether the balance can fully pay each month's spending. The sustainable constant-return spending amount is the retirement portfolio divided by the present-value factor of all planned monthly withdrawals. This check is distinct from the initial 4% withdrawal-rule target and cannot guarantee outcomes.
+
+**4. Monte Carlo simulation**
 
 For each simulated path, the model generates annual investment returns, converts them into monthly real growth, adds deposits until retirement, and models monthly withdrawals afterwards. The **target probability** and **spending sustainability probability** are calculated separately.
 
-**4. Savings goal for ~80% of simulated paths**
+**5. Savings goal for ~80% of simulated paths**
 
 For each path, the retirement balance equals the grown starting savings plus monthly deposits multiplied by their accumulation factor. Solving that equation for the contribution gives a required amount for each path. The app takes the 80th percentile of those amounts.
 """)

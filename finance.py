@@ -186,7 +186,10 @@ def retirement_projection(
                 balance = before_transaction + contribution
                 contributions += contribution
             else:
-                if before_transaction + 1e-8 < target_monthly_income and depletion_age is None:
+                # A cent-level tolerance avoids a false shortfall in the final
+                # payment caused solely by floating-point compounding error.
+                if (before_transaction + max(0.01, target_monthly_income * 1e-10)
+                        < target_monthly_income and depletion_age is None):
                     depletion_age = age + (month + 1) / 12
                 actual_withdrawal = min(before_transaction, target_monthly_income)
                 balance = max(0.0, before_transaction - actual_withdrawal)
@@ -251,7 +254,8 @@ def monte_carlo_projection(
             if age < retirement_age:
                 balances = before_transaction + monthly_contribution
             else:
-                depleted |= before_transaction + 1e-8 < monthly_retirement_income
+                depleted |= (before_transaction + max(0.01, monthly_retirement_income * 1e-10)
+                             < monthly_retirement_income)
                 balances = np.maximum(0.0, before_transaction - monthly_retirement_income)
         paths[year_idx + 1] = balances
 
