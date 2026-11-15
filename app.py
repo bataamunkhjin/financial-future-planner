@@ -48,29 +48,53 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .block-container {max-width: 1290px; padding-top: 1.2rem; padding-bottom: 3rem;}
+    /* v4.1 visual refresh: the entire theme ships in app.py; no new deployment files. */
+    :root {--ink:#142c41;--ocean:#047e8d;--mint:#16b59b;--edge:#dce8ed;}
+    html,body,[data-testid="stAppViewContainer"] {font-family: Inter, "Segoe UI", Arial, sans-serif;}
+    .block-container {max-width: 1380px; padding-top: 1.1rem; padding-bottom: 3rem;}
+    [data-testid="stAppViewContainer"] {background:linear-gradient(180deg,#f2f8fc 0%,#f9fbfd 36%,#fff 100%);}
+    section[data-testid="stSidebar"] {background:linear-gradient(180deg,#edf6f8,#f8fbfc);border-right:1px solid #dbe6eb;}
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {line-height:1.55;}
+    .block-container h4 {color:#17374f; padding-left:12px; border-left:4px solid #1a9f9e; margin-top:1.7rem; margin-bottom: .75rem;}
+    .block-container h3 {color:#102c43;}
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {border-color:#dce9ed !important;}
+    [data-testid="stPlotlyChart"] {background:#fff;border:1px solid #e1ebef;border-radius:16px;padding:8px 10px;box-shadow:0 6px 24px rgba(11,51,71,.035);}
+    [data-testid="stDataFrame"] {border-radius:12px;overflow:hidden;}
+    .insight-strip{background:#f0f8fa;border:1px solid #d7ebed;padding:13px 17px;border-radius:14px;color:#284658;margin:12px 0 18px;line-height:1.55;}
+    .section-kicker {font-size:.72rem;font-weight:800;letter-spacing:.11em;color:#168487;text-transform:uppercase;margin:10px 0 2px;}
+    .section-intro {font-size:.9rem;color:#627989;margin:0 0 16px;}
+    .chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0 0;}
+    .chip{border:1px solid rgba(255,255,255,.28);padding:5px 10px;border-radius:30px;font-size:.78rem;color:#e3fbf9;background:rgba(255,255,255,.11);}
+    .viz-label{font-size:.90rem;font-weight:750;color:#1e465a;margin:5px 0 8px;}
+
     h1, h2, h3, h4 {letter-spacing: -.026em;}
     .planner-hero {
-        background: linear-gradient(110deg, #0f2b42 0%, #184c61 58%, #166a70 100%);
-        border-radius: 18px; padding: 25px 30px 22px; color: #fff;
-        margin-bottom: 1rem; box-shadow: 0 12px 28px rgba(10, 45, 65, .12);
+        position:relative;overflow:hidden;
+        background: linear-gradient(113deg, #102c46 0%, #13516b 56%, #007e83 100%);
+        border-radius: 22px; padding: 30px 34px; color: #fff;
+        margin-bottom: 1.2rem; box-shadow: 0 15px 36px rgba(11,49,70,.16);
     }
+    .planner-hero::after {content:"";position:absolute;width:310px;height:310px;right:-125px;top:-165px;border:54px solid rgba(173,255,227,.075);border-radius:50%;pointer-events:none;}
     .planner-hero h1 {color: #fff; margin: 0; font-size: 2.0rem; line-height: 1.25;}
     .planner-hero p {color: #dcefeb; margin: 8px 0 0; font-size: .99rem;}
     .planner-hero .hero-eyebrow {color: #8ee2cc; font-size: .76rem; letter-spacing: .12em; font-weight: 800; margin: 0 0 6px;}
     [data-testid="stMetric"] {
-        background: #f5faf9; padding: 14px 15px; border-radius: 14px;
-        border: 1px solid #d9e8e5; min-height: 105px;
+        background: #fff; padding: 16px; border-radius: 16px;
+        border: 1px solid #dce9eb; min-height: 116px;
+        box-shadow:0 6px 17px rgba(20,61,80,.04);
     }
-    [data-testid="stMetricValue"] {font-size: 1.47rem; letter-spacing: -.02em;}
+    [data-testid="stMetricValue"] {font-size: 1.53rem; letter-spacing: -.035em;color:#143749;}
+    [data-testid="stMetricLabel"] {color:#5d7888;font-weight:650;font-size:.88rem;}
     [data-testid="stMetricLabel"] {line-height: 1.25;}
-    [data-testid="stTabs"] button[aria-selected="true"] {font-weight: 700;}
+    [data-testid="stTabs"] button[aria-selected="true"] {font-weight: 800;color:#007f87;border-bottom:3px solid #139d97;}
+    [data-testid="stTabs"] button {padding:12px 17px;font-weight:650;}
     [data-testid="stExpander"] {border-radius: 12px;}
     [data-testid="stMetricDelta"] {font-size: .9rem;}
     .section-note {color:#586a74; font-size: .91rem;}
     @media (max-width: 760px) {
         .block-container {padding-top: .7rem;}
-        .planner-hero {padding: 20px;}
+        .planner-hero {padding: 23px;}
+        .chip-row {gap:5px;}
         .planner-hero h1 {font-size: 1.5rem;}
         [data-testid="stMetricValue"] {font-size: 1.22rem;}
     }
@@ -178,20 +202,23 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
         margin=dict(l=8, r=12, t=15, b=12),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", y=1.13, x=0),
+        legend=dict(orientation="h", y=1.15, x=0, font=dict(size=11)),
         hovermode="x unified",
-        font=dict(size=12),
+        font=dict(family="Arial, sans-serif", size=12, color="#334e62"),
+        colorway=["#0d8f93", "#335e98", "#f29c56", "#8675bf", "#a4b8c7"],
+        hoverlabel=dict(bgcolor="#ffffff", font_size=12),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(gridcolor="rgba(135,147,166,.16)", zeroline=False, title=y_label)
+    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#e3eaf0", ticks="outside", tickcolor="#d5e1e7")
+    fig.update_yaxes(gridcolor="rgba(135,147,166,.14)", zeroline=False, title=y_label, separatethousands=True)
     return fig
 
 
 st.markdown(
     """<section class="planner-hero">
-      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER  /  v4</p>
-      <h1>Plan your money. Understand your future.</h1>
-      <p>Mortgage decisions, retirement readiness, lifetime spending and inflation - in one place.</p>
+      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER &nbsp; / &nbsp; VISUAL EDITION v4.1</p>
+      <h1>Make confident financial decisions.</h1>
+      <p>Clear numbers, richer charts, and a better view of the road ahead.</p>
+      <div class="chip-row"><span class="chip">🏠 Loan insights</span><span class="chip">🌱 Retirement planning</span><span class="chip">📉 Risk scenarios</span><span class="chip">📄 PDF reporting</span></div>
     </section>""",
     unsafe_allow_html=True,
 )
@@ -274,6 +301,42 @@ with loan_tab:
             "Payoff assumes the first scheduled payment occurs one month after the loan start date."
         )
 
+    st.markdown('<p class="section-kicker">Your mortgage, visualized</p>', unsafe_allow_html=True)
+    st.markdown("#### Payment breakdown & interest over time")
+    st.caption("See the total cost of borrowing and how making additional principal payments changes that cost.")
+    vd1, vd2 = st.columns([0.85, 1.15])
+    with vd1:
+        st.markdown('<div class="viz-label">Where your payments go · with extra payments</div>', unsafe_allow_html=True)
+        allocation = go.Figure(go.Pie(
+            labels=["Original principal", "Loan interest"],
+            values=[loan_amount, chosen_stats["interest"]],
+            hole=0.68, sort=False, direction="clockwise",
+            marker=dict(colors=["#098b95", "#f2a36b"], line=dict(color="#fff", width=3)),
+            textinfo="percent", textposition="outside",
+            hovertemplate="%{label}: %{value:,.0f} ( %{percent} )<extra></extra>",
+        ))
+        allocation.update_layout(
+            annotations=[dict(text="TOTAL PAID", x=.5, y=.54, font=dict(size=11,color="#637b8e"),showarrow=False),
+                         dict(text=f"{CURRENCY}{chosen_stats['paid']:,.0f}", x=.5, y=.46,
+                              font=dict(size=17,color="#173a4e"),showarrow=False)],
+            showlegend=True, legend=dict(orientation="h", x=.5, xanchor="center", y=-.08),
+        )
+        st.plotly_chart(plot_layout(allocation, height=322), use_container_width=True)
+    with vd2:
+        st.markdown('<div class="viz-label">Cumulative interest paid</div>', unsafe_allow_html=True)
+        fig_interest = go.Figure()
+        fig_interest.add_trace(go.Scatter(
+            x=[0]+standard["Month"].tolist(),y=[0]+standard["Cumulative Interest"].tolist(),
+            name="Standard loan",mode="lines",line=dict(color="#8295a8",width=3),
+            hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>"
+        ))
+        fig_interest.add_trace(go.Scatter(
+            x=[0]+chosen["Month"].tolist(),y=[0]+chosen["Cumulative Interest"].tolist(),
+            name="With extra payments",mode="lines",line=dict(color="#0d9b92",width=3),
+            hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>"
+        ))
+        fig_interest.update_xaxes(title="Months from loan start")
+        st.plotly_chart(plot_layout(fig_interest, height=322, y_label=f"Interest paid ({CURRENCY})"),use_container_width=True)
     st.markdown("#### Repayment charts")
     left, right = st.columns([1.2, 1])
     with left:
@@ -318,6 +381,17 @@ with loan_tab:
         hide_index=True, use_container_width=True,
     )
 
+    st.markdown('<div class="viz-label">Interest saved under different extra-payment strategies</div>', unsafe_allow_html=True)
+    fig_extra = go.Figure(go.Bar(
+        x=extra_scenarios["Scenario"], y=extra_scenarios["Interest Saved"],
+        marker=dict(color=["#b1c2cb" if i == 0 else "#16a2a0" for i in range(len(extra_scenarios))],
+                    line=dict(width=0)),
+        text=[money(v) for v in extra_scenarios["Interest Saved"]], textposition="outside",
+        hovertemplate="%{x}<br>Interest saved: %{y:,.0f}<extra></extra>",
+    ))
+    fig_extra.update_layout(showlegend=False)
+    st.plotly_chart(plot_layout(fig_extra, height=305, y_label=f"Interest saved ({CURRENCY})"), use_container_width=True)
+
     st.markdown("#### What if interest rates were different?")
     rate_scenarios = loan_rate_scenarios(
         loan_amount, interest_rate, loan_years, extra_monthly, loan_start
@@ -331,12 +405,23 @@ with loan_tab:
         show_rates[["Scenario", "Annual Rate", "Monthly P&I", "Total Interest", "Payoff Date"]],
         hide_index=True, use_container_width=True,
     )
+    fig_rates = go.Figure(go.Scatter(
+        x=rate_scenarios["Rate (%)"], y=rate_scenarios["Monthly P&I"],
+        name="Monthly payment", mode="lines+markers",
+        line=dict(color="#0f8f99", width=3), marker=dict(size=10,color="#0f8f99",line=dict(color="#fff",width=2)),
+        hovertemplate="Rate: %{x:.2f}%<br>Payment: %{y:,.2f}<extra></extra>",
+    ))
+    fig_rates.update_xaxes(title="Hypothetical annual interest rate (%)")
+    st.plotly_chart(plot_layout(fig_rates, height=275, y_label=f"Monthly principal & interest ({CURRENCY})"),use_container_width=True)
     st.caption(
         "Rate scenarios are hypothetical quotes for a *new* fixed-rate loan. "
         "Existing fixed-rate mortgages do not automatically reprice when interest rates change. "
         "The entered extra payment stays unchanged in each scenario."
     )
 
+    st.markdown("#### Your potential interest savings")
+    reduction_ratio = saved_interest / standard_stats["interest"] if standard_stats["interest"] > 0 else 0.0
+    st.progress(min(1.0,max(0.0,reduction_ratio)), text=f"{reduction_ratio:.1%} of standard loan interest avoided with your extra payment")
     st.markdown("#### Automatic loan insights")
     loan_insights = []
     if extra_monthly > 0:
@@ -574,6 +659,31 @@ with retirement_tab:
             "Remaining funds continue earning returns during retirement. This is not a guarantee."
         )
 
+    st.markdown("#### Your progress toward retirement")
+    funded_share = planned_balance / portfolio_target if portfolio_target > 0 else 1.0
+    st.progress(min(1.0,max(0.0,funded_share)), text=f"{funded_share:.1%} of modeled fixed-return retirement capital target")
+    st.caption("The funded ratio compares projected savings at retirement with the capital needed to finance your chosen spending horizon at a constant real return. It is not a success probability.")
+
+    st.markdown("#### Savings deposits versus investment growth")
+    st.caption("Your deposits and your investment balance are separated to show the effect of compounding before retirement. All amounts are inflation-adjusted.")
+    before_retirement = projection.loc[projection["Age"] <= int(retirement_age)].copy()
+    before_retirement["Deposits including starting savings"] = (
+        retirement_savings + (before_retirement["Age"] - int(current_age)) * 12 * retirement_contribution
+    )
+    fig_build = go.Figure()
+    fig_build.add_trace(go.Scatter(
+        x=before_retirement["Age"], y=before_retirement["Deposits including starting savings"],
+        name="Your deposits + starting savings", mode="lines", line=dict(color="#91a5b8",width=3),
+        hovertemplate="Age %{x}: %{y:,.0f}<extra></extra>"
+    ))
+    fig_build.add_trace(go.Scatter(
+        x=before_retirement["Age"], y=before_retirement["Balance (today's money)"],
+        name="Total projected portfolio", mode="lines", line=dict(color="#098f96",width=4),
+        hovertemplate="Age %{x}: %{y:,.0f}<extra></extra>"
+    ))
+    fig_build.update_xaxes(title="Age before retirement")
+    st.plotly_chart(plot_layout(fig_build, height=340, y_label=f"Value ({CURRENCY}, today's money)"), use_container_width=True)
+
     st.markdown("#### Savings goal for 80% modeled spending success")
     with st.container(border=True):
         st.caption(f"Savings needed for approximately 80% of simulated paths to pay every monthly withdrawal through age {planning_age}.")
@@ -662,6 +772,32 @@ with retirement_tab:
         f"Around age {depletion_age:.1f}" if depletion_age is not None else f"Not through age {planning_age}",
     )
 
+    st.markdown("#### Monte Carlo outcomes at a glance")
+    mc_left, mc_right = st.columns([0.8, 1.2])
+    with mc_left:
+        sim_probability = float(simulation["sustain_probability"])
+        outcome_fig = go.Figure(go.Pie(
+            labels=["Funded all withdrawals", "Had a shortfall"],
+            values=[sim_probability, max(0.0,1-sim_probability)],
+            hole=.73, marker=dict(colors=["#12a79f", "#e3a06e"],line=dict(color="#fff",width=3)),
+            textinfo="none", sort=False,
+            hovertemplate="%{label}: %{percent}<extra></extra>",
+        ))
+        outcome_fig.update_layout(annotations=[dict(text=f"{sim_probability:.1%}", x=.5, y=.54,
+                              showarrow=False,font=dict(color="#12384b",size=24)),
+                              dict(text="modeled success",x=.5,y=.42,showarrow=False,
+                              font=dict(color="#648092",size=10))],
+                              legend=dict(orientation="h",y=-.12,x=.5,xanchor="center"))
+        st.plotly_chart(plot_layout(outcome_fig,height=310),use_container_width=True)
+    with mc_right:
+        st.markdown("**What the simulation means**")
+        st.markdown(f"""
+        - **{int(round(sim_probability * int(simulations))):,} of {int(simulations):,}** simulated market paths funded every monthly withdrawal.
+        - Each path uses the selected expected return, volatility, inflation, and planning age.
+        - A success result is **not a guarantee** and does not predict longevity.
+        """)
+        st.markdown('<div class="insight-strip"><strong>Reading the chart:</strong> The teal share funded all planned monthly withdrawals; the amber share experienced at least one spending shortfall before the selected age.</div>', unsafe_allow_html=True)
+
     st.markdown("#### Retirement Life Simulator")
     st.caption(
         "At retirement, deposits stop. Your portfolio continues earning the modeled return "
@@ -704,6 +840,24 @@ with retirement_tab:
         }),
         use_container_width=True, hide_index=True, height=300,
     )
+    st.markdown("**Annual investment growth versus withdrawals**")
+    cashflow_fig = go.Figure()
+    cashflow_fig.add_trace(go.Bar(
+        x=retirement_yearly["Age"], y=retirement_yearly["Investment Growth"],
+        name="Investment growth",marker_color="#0d9792",
+        hovertemplate="Age %{x}: %{y:,.0f}<extra></extra>",
+    ))
+    cashflow_fig.add_trace(go.Bar(
+        x=retirement_yearly["Age"],y=-retirement_yearly["Actual Withdrawals"],
+        name="Withdrawals funded",marker_color="#ed9865",
+        hovertemplate="Age %{x}: %{customdata:,.0f}<extra></extra>",
+        customdata=retirement_yearly["Actual Withdrawals"],
+    ))
+    cashflow_fig.update_layout(barmode="relative")
+    cashflow_fig.update_xaxes(title="Age at end of retirement year")
+    st.plotly_chart(plot_layout(cashflow_fig,height=350,y_label=f"Annual portfolio cash flow ({CURRENCY})"),use_container_width=True)
+    st.caption("Withdrawals are shown below zero to distinguish cash leaving the portfolio. Returns continue after retirement, including years with investment losses.")
+
     d1, d2 = st.columns(2)
     with d1:
         st.download_button(
@@ -978,6 +1132,14 @@ with loan_tab:
     for key in ("Invest Final", "Prepay Final", "Invest - Prepay"):
         show_investing_cases[key] = show_investing_cases[key].map(money)
     st.dataframe(show_investing_cases, hide_index=True, use_container_width=True)
+    st.markdown("**Strategy advantage by assumed investment return**")
+    difference_plot = go.Figure(go.Bar(
+        x=investing_rate_cases["Scenario"], y=investing_rate_cases["Invest - Prepay"],
+        marker_color=["#13a18f" if val >= 0 else "#df9a66" for val in investing_rate_cases["Invest - Prepay"]],
+        hovertemplate="%{x}<br>Invest minus prepay: %{y:,.0f}<extra></extra>",
+    ))
+    difference_plot.add_hline(y=0,line_color="#8395a7",line_width=1)
+    st.plotly_chart(plot_layout(difference_plot,height=280,y_label=f"Invest − prepay ({CURRENCY})"),use_container_width=True)
     st.caption(
         "Each row assumes a DIFFERENT constant investment return, not a predicted probability. "
         "The 'Loan return break-even' row uses the fixed mortgage's effective annual borrowing rate. "
@@ -1061,4 +1223,4 @@ with retirement_tab:
 
 
 st.divider()
-st.caption("Financial Future Planner • Streamlit class project • Educational estimates only")
+st.caption("Financial Future Planner · v4.1 Visual Edition · Educational estimates, not personalized financial advice")
