@@ -48,7 +48,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* v4.1 visual refresh: the entire theme ships in app.py; no new deployment files. */
+    /* v4.2 visual refresh: aligned inputs and fewer redundant charts. */
     :root {--ink:#142c41;--ocean:#047e8d;--mint:#16b59b;--edge:#dce8ed;}
     html,body,[data-testid="stAppViewContainer"] {font-family: Inter, "Segoe UI", Arial, sans-serif;}
     .block-container {max-width: 1380px; padding-top: 1.1rem; padding-bottom: 3rem;}
@@ -215,7 +215,7 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
 
 st.markdown(
     """<section class="planner-hero">
-      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER &nbsp; / &nbsp; VISUAL EDITION v4.1</p>
+      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER &nbsp; / &nbsp; VISUAL EDITION v4.2</p>
       <h1>Make confident financial decisions.</h1>
       <p>Clear numbers, richer charts, and a better view of the road ahead.</p>
       <div class="chip-row"><span class="chip">🏠 Loan insights</span><span class="chip">🌱 Retirement planning</span><span class="chip">📉 Risk scenarios</span><span class="chip">📄 PDF reporting</span></div>
@@ -237,7 +237,9 @@ with loan_tab:
     st.caption("Four essential inputs. Monetary fields add commas after pressing Enter or clicking outside.")
 
     with st.container(border=True):
-        a, b, c, d = st.columns(4)
+        # Align the four widget controls along one baseline even when
+        # their native Streamlit widget types have different label spacing.
+        a, b, c, d = st.columns(4, vertical_alignment="bottom")
         with a:
             loan_amount = money_input(
                 f"Loan amount ({CURRENCY})", name="loan_amount",
@@ -253,9 +255,10 @@ with loan_tab:
             loan_years = st.slider("Loan term (years)", min_value=1, max_value=40, value=20 if IS_MNT else 30)
         with d:
             extra_monthly = money_input(
-                f"Extra monthly payment ({CURRENCY})", name="extra_monthly",
+                f"Extra payment ({CURRENCY})", name="extra_monthly",
                 min_value=0.0, max_value=10_000_000_000.0,
                 default=300_000.0 if IS_MNT else 200.0,
+                help_text="Extra amount paid every month on top of your regular loan payment; applied to principal.",
             )
 
         with st.expander("Advanced mortgage costs and loan start date (optional)"):
@@ -263,7 +266,7 @@ with loan_tab:
                 "Taxes, insurance, and PMI affect monthly housing cash flow, not the "
                 "principal-and-interest amortization calculation."
             )
-            x, y, z, w = st.columns(4)
+            x, y, z, w = st.columns(4, vertical_alignment="bottom")
             with x:
                 loan_start = st.date_input("Loan starts", value=date.today(), min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
             with y:
@@ -505,7 +508,7 @@ with retirement_tab:
     st.caption("Five essential inputs. Monetary fields add commas after pressing Enter or clicking outside; all values are in today's purchasing power.")
 
     with st.container(border=True):
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4, c5 = st.columns(5, vertical_alignment="bottom")
         with c1:
             current_age = st.number_input("Current age", min_value=18, max_value=80, value=25, step=1)
         with c2:
@@ -532,7 +535,7 @@ with retirement_tab:
 
         with st.expander("Advanced retirement assumptions (optional)"):
             st.caption("Illustrative assumptions, not forecasts or guaranteed performance.")
-            v1, v2, v3, v4 = st.columns(4)
+            v1, v2, v3, v4 = st.columns(4, vertical_alignment="bottom")
             with v1:
                 expected_return = st.number_input("Annual nominal return (%)", min_value=-10.0, max_value=30.0, value=7.0, step=0.5)
             with v2:
@@ -771,32 +774,6 @@ with retirement_tab:
         "Constant-return income depletion",
         f"Around age {depletion_age:.1f}" if depletion_age is not None else f"Not through age {planning_age}",
     )
-
-    st.markdown("#### Monte Carlo outcomes at a glance")
-    mc_left, mc_right = st.columns([0.8, 1.2])
-    with mc_left:
-        sim_probability = float(simulation["sustain_probability"])
-        outcome_fig = go.Figure(go.Pie(
-            labels=["Funded all withdrawals", "Had a shortfall"],
-            values=[sim_probability, max(0.0,1-sim_probability)],
-            hole=.73, marker=dict(colors=["#12a79f", "#e3a06e"],line=dict(color="#fff",width=3)),
-            textinfo="none", sort=False,
-            hovertemplate="%{label}: %{percent}<extra></extra>",
-        ))
-        outcome_fig.update_layout(annotations=[dict(text=f"{sim_probability:.1%}", x=.5, y=.54,
-                              showarrow=False,font=dict(color="#12384b",size=24)),
-                              dict(text="modeled success",x=.5,y=.42,showarrow=False,
-                              font=dict(color="#648092",size=10))],
-                              legend=dict(orientation="h",y=-.12,x=.5,xanchor="center"))
-        st.plotly_chart(plot_layout(outcome_fig,height=310),use_container_width=True)
-    with mc_right:
-        st.markdown("**What the simulation means**")
-        st.markdown(f"""
-        - **{int(round(sim_probability * int(simulations))):,} of {int(simulations):,}** simulated market paths funded every monthly withdrawal.
-        - Each path uses the selected expected return, volatility, inflation, and planning age.
-        - A success result is **not a guarantee** and does not predict longevity.
-        """)
-        st.markdown('<div class="insight-strip"><strong>Reading the chart:</strong> The teal share funded all planned monthly withdrawals; the amber share experienced at least one spending shortfall before the selected age.</div>', unsafe_allow_html=True)
 
     st.markdown("#### Retirement Life Simulator")
     st.caption(
