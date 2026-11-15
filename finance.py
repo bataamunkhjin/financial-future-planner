@@ -640,3 +640,182 @@ def mortgage_investing_return_scenarios(
             "Favored Strategy": result["winner"],
         })
     return pd.DataFrame(rows)
+
+# -------------------- Financial Future Planner v4 --------------------
+
+def retirement_life_schedule(
+    starting_portfolio: float,
+    retirement_age: int,
+    planning_age: int,
+    monthly_spending: float,
+    annual_nominal_return_pct: float,
+    inflation_pct: float,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Month-by-month drawdown after retirement, summarized into retirement years.
+
+    Returns are credited before each end-of-month withdrawal. All currency amounts
+    are in today's purchasing power; contributions STOP at the retirement age.
+    Unfunded withdrawals remain visible as a shortfall, never a negative balance.
+    """
+    if not (retirement_age < planning_age):
+        raise ValueError("The planning age must exceed the retirement age.")
+    if starting_portfolio < 0 or monthly_spending < 0:
+        raise ValueError("The starting portfolio and spending must be nonnegative.")
+    rate = real_monthly_return(annual_nominal_return_pct, inflation_pct)
+    balance = float(starting_portfolio)
+    total_withdrawn = 0.0
+    monthly_rows, annual_rows = [], []
+    for year in range(planning_age - retirement_age):
+        age = retirement_age + year
+        annual_start = balance
+        annual_growth = 0.0
+        actual_paid = 0.0
+        annual_shortfall = 0.0
+        for m in range(1, 13):
+            beginning = balance
+            growth = beginning * rate
+            available = max(0.0, beginning + growth)
+            withdrawn = min(available, monthly_spending)
+            unpaid = max(0.0, monthly_spending - withdrawn)
+            # Ignore cent-level discrepancies from float accumulation.
+            if unpaid <= max(0.01, monthly_spending * 1e-10):
+                unpaid = 0.0
+            balance = max(0.0, available - withdrawn)
+            total_withdrawn += withdrawn
+            annual_growth += growth
+            actual_paid += withdrawn
+            annual_shortfall += unpaid
+            monthly_rows.append({
+                "Retirement Month": year * 12 + m,
+                "Age": age + m / 12,
+                "Beginning Balance": beginning,
+                "Investment Growth": growth,
+                "Planned Spending": monthly_spending,
+                "Actual Withdrawal": withdrawn,
+                "Unfunded Spending": unpaid,
+                "Ending Balance": balance,
+            })
+        annual_rows.append({
+            "Age": age + 1,
+            "Starting Balance": annual_start,
+            "Investment Growth": annual_growth,
+            "Planned Spending": 12 * monthly_spending,
+            "Actual Withdrawals": actual_paid,
+            "Unfunded Spending": annual_shortfall,
+            "Ending Balance": balance,
+            "Cumulative Withdrawals": total_withdrawn,
+        })
+    return pd.DataFrame(monthly_rows), pd.DataFrame(annual_rows)
+
+
+def inflation_purchasing_power(
+    retirement_projection_df: pd.DataFrame,
+    current_age: int,
+    target_monthly_spending: float,
+    annual_inflation_pct: float,
+) -> pd.DataFrame:
+    """Show constant-real values versus nominal future-money equivalents.
+
+    Real portfolios and real spending are in purchasing power as of current_age.
+    Nominal figures use a fixed inflation assumption, not currency conversion.
+    """
+    if current_age < 0 or target_monthly_spending < 0 or annual_inflation_pct <= -100:
+        raise ValueError("Invalid age, spending, or inflation.")
+    ages = retirement_projection_df["Age"].to_numpy(dtype=float)
+    if len(ages) == 0 or np.any(ages < current_age):
+        raise ValueError("The retirement projection must start at or after current age.")
+    real_portfolio = retirement_projection_df["Balance (today's money)"].to_numpy(dtype=float)
+    nominal_factor = np.power(1 + annual_inflation_pct / 100, ages - current_age)
+    return pd.DataFrame({
+        "Age": ages.astype(int),
+        "Years from Today": (ages - current_age).astype(int),
+        "Inflation Multiplier": nominal_factor,
+        "Portfolio - Today's Money": real_portfolio,
+        "Portfolio - Future Money": real_portfolio * nominal_factor,
+        "Monthly Spending - Today's Money": np.full(len(ages), target_monthly_spending),
+        "Monthly Spending - Future Money": target_monthly_spending * nominal_factor,
+        "Purchasing Power of One Nominal Unit": 1.0 / nominal_factor,
+    })
+
+
+def model_supported_monthly_spending(
+    current_age: int,
+    retirement_age: int,
+    planning_age: int,
+    current_savings: float,
+    monthly_contribution: float,
+    monthly_target_income: float,
+    expected_nominal_return_pct: float,
+    inflation_pct: float,
+    annual_volatility_pct: float,
+    simulations: int = 1000,
+    target_probabilities: tuple[float, ...] = (0.80, 0.90, 0.95),
+    seed: int = 42,
+) -> dict:
+    """Find model-supported spending at a stated *simulated* success frequency.
+
+    Each path is sampled exactly as in monte_carlo_projection with the same seed.
+    After accumulating before retirement, compute the present value at retirement
+    of one real unit withdrawn at the end of each retirement month. The maximum
+    affordable constant-real withdrawal for a path is nest_egg / unit_annuity.
+    Sort path limits to return conservative empirical 80%, 90%, 95% thresholds.
+    These are scenario-model thresholds, not guarantees or investment advice.
+    """
+    if not (current_age < retirement_age < planning_age):
+        raise ValueError("Require current age < retirement age < planning age.")
+    if min(current_savings, monthly_contribution, monthly_target_income) < 0:
+        raise ValueError("Savings, contributions, and spending must be nonnegative.")
+    if not (1 <= simulations <= 100000) or annual_volatility_pct < 0:
+        raise ValueError("Invalid simulation count or volatility.")
+    if expected_nominal_return_pct <= -100 or inflation_pct <= -100:
+        raise ValueError("Rates must be greater than -100%.")
+    if any(p <= 0 or p > 1 for p in target_probabilities):
+        raise ValueError("Success targets must be in (0, 1].")
+
+    multiplier = 1 + expected_nominal_return_pct / 100.0
+    vol = annual_volatility_pct / 100.0
+    sigma_log = np.sqrt(np.log1p((vol / multiplier) ** 2))
+    mu_log = np.log(multiplier) - 0.5 * sigma_log**2
+    inflation_factor = 1 + inflation_pct / 100.0
+    rng = np.random.default_rng(seed)
+    savings = np.full(simulations, current_savings, dtype=float)
+    discount = np.ones(simulations, dtype=float)
+    unit_annuity = np.zeros(simulations, dtype=float)
+    at_retirement = None
+
+    for age in range(current_age, planning_age):
+        annual_factor = np.exp(mu_log + sigma_log * rng.standard_normal(simulations))
+        monthly_factor = (annual_factor / inflation_factor) ** (1 / 12)
+        if age < retirement_age:
+            for _ in range(12):
+                savings = savings * monthly_factor + monthly_contribution
+            if age == retirement_age - 1:
+                at_retirement = savings.copy()
+        else:
+            for _ in range(12):
+                discount = discount / monthly_factor
+                unit_annuity += discount
+
+    if at_retirement is None:
+        raise RuntimeError("Retirement accumulation failed.")
+    capacities = at_retirement / unit_annuity
+    sorted_capacities = np.sort(capacities)
+    options = []
+    for prob in target_probabilities:
+        count_required = math.ceil(prob * simulations)
+        # At this order statistic at least ceil(prob*N) paths support spending.
+        index = simulations - count_required
+        amount = float(sorted_capacities[index])
+        options.append({
+            "Success Target": prob,
+            "Monthly Spending": amount,
+            "Simulated Success": float(np.mean(capacities >= amount - max(0.01, amount * 1e-10))),
+        })
+    current_success = float(np.mean(capacities + max(0.01, monthly_target_income * 1e-10) >= monthly_target_income))
+    return {
+        "options": pd.DataFrame(options),
+        "current_spending_success": current_success,
+        "capacities": capacities,
+        "median_retirement_balance": float(np.median(at_retirement)),
+        "simulations": simulations,
+    }

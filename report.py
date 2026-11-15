@@ -148,6 +148,9 @@ def generate_pdf_report(
     loan_milestones: pd.DataFrame | None = None,
     investment_sensitivity: pd.DataFrame | None = None,
     savings_goal: dict | None = None,
+    retirement_life_df: pd.DataFrame | None = None,
+    safe_spending: dict | None = None,
+    inflation_df: pd.DataFrame | None = None,
 ) -> bytes:
     """Generate a small multi-page financial report from already-calculated app data."""
     code = code if code in {"USD", "MNT", "EUR"} else "CUR"
@@ -284,6 +287,52 @@ def generate_pdf_report(
         ["Drawdown capital method", "Discounted monthly withdrawals over the selected horizon at an assumed constant real return."],
     ], [149, width - 149])
     small("This is a simplified education-only analysis: do not substitute these outputs for a real lender quote, financial advisor, actuarial plan, or personalized investment recommendation.")
+
+    if retirement_life_df is not None and safe_spending is not None and inflation_df is not None:
+        story.append(PageBreak())
+        heading("05  |  Lifetime spending and purchasing power (v4)")
+        para(
+            "The retirement life simulator keeps investment earnings running after retirement, "
+            "stops contributions, and deducts spending every month. The figures below are in "
+            "today's purchasing power unless labeled nominal."
+        )
+        heading("Model-supported monthly spending")
+        table(["Simulated success target", "Monthly amount (real)", "Actual success on sampled paths"], [
+            [f'{row["Success Target"]:.0%}', _currency(row["Monthly Spending"], code),
+             f'{row["Simulated Success"]:.1%}']
+            for _, row in safe_spending["options"].iterrows()
+        ], [163, 165, width - 328])
+        small(
+            "These are empirical simulated spending thresholds, NOT guaranteed safe amounts. "
+            "The return assumptions, fixed inflation and 1,000/2,000 modeled paths may not match actual markets."
+        )
+        heading("Retirement life simulator - yearly checkpoints")
+        start_age = retirement["retirement_age"]
+        end_age = retirement["planning_age"]
+        check_ages = {start_age + 1, end_age}
+        check_ages.update(range(((start_age // 10) + 1) * 10, end_age, 10))
+        checkpoints = retirement_life_df[retirement_life_df["Age"].isin(check_ages)]
+        table(["Age", "Investment growth / year", "Withdrawals paid / year", "Ending balance (real)"], [
+            [int(row["Age"]), _currency(row["Investment Growth"], code),
+             _currency(row["Actual Withdrawals"], code), _currency(row["Ending Balance"], code)]
+            for _, row in checkpoints.iterrows()
+        ], [48, 149, 157, width - 354])
+        small(
+            "Investment growth can be negative. If the portfolio is exhausted, the simulator "
+            "records unfunded spending separately rather than allowing a negative portfolio."
+        )
+        heading("Inflation - same spending in today's and future money")
+        story.append(_line_chart([
+            ("Today's buying power", inflation_df["Age"].to_numpy(),
+             inflation_df["Monthly Spending - Today's Money"].to_numpy(), TEAL),
+            ("Future nominal amount", inflation_df["Age"].to_numpy(),
+             inflation_df["Monthly Spending - Future Money"].to_numpy(), BLUE),
+        ], width=width, height=140))
+        small(
+            f"The example spends {_currency(retirement['income'], code)} per month in today's money. "
+            "Nominal future amounts rise with the assumed inflation rate; this does not mean "
+            "a higher standard of living. No foreign exchange conversion is performed."
+        )
 
     doc.build(story)
     return buf.getvalue()

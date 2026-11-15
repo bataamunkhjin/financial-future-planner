@@ -31,6 +31,9 @@ from finance import (
     simulated_lifetime_savings_goal,
     drawdown_portfolio_requirement,
     mortgage_investing_return_scenarios,
+    retirement_life_schedule,
+    inflation_purchasing_power,
+    model_supported_monthly_spending,
 )
 from report import generate_pdf_report
 
@@ -45,21 +48,31 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .block-container {max-width: 1260px; padding-top: 2rem; padding-bottom: 3rem;}
-    h1, h2, h3 {letter-spacing: -.02em;}
-    [data-testid="stMetric"] {
-        background: rgba(125, 145, 165, .08);
-        padding: 16px 18px;
-        border-radius: 12px;
-        border: 1px solid rgba(125, 145, 165, .16);
+    .block-container {max-width: 1290px; padding-top: 1.2rem; padding-bottom: 3rem;}
+    h1, h2, h3, h4 {letter-spacing: -.026em;}
+    .planner-hero {
+        background: linear-gradient(110deg, #0f2b42 0%, #184c61 58%, #166a70 100%);
+        border-radius: 18px; padding: 25px 30px 22px; color: #fff;
+        margin-bottom: 1rem; box-shadow: 0 12px 28px rgba(10, 45, 65, .12);
     }
-    [data-testid="stMetricValue"] {font-size: 1.65rem;}
-    .subtle {color: #8291a2; font-size: 0.95rem;}
+    .planner-hero h1 {color: #fff; margin: 0; font-size: 2.0rem; line-height: 1.25;}
+    .planner-hero p {color: #dcefeb; margin: 8px 0 0; font-size: .99rem;}
+    .planner-hero .hero-eyebrow {color: #8ee2cc; font-size: .76rem; letter-spacing: .12em; font-weight: 800; margin: 0 0 6px;}
+    [data-testid="stMetric"] {
+        background: #f5faf9; padding: 14px 15px; border-radius: 14px;
+        border: 1px solid #d9e8e5; min-height: 105px;
+    }
+    [data-testid="stMetricValue"] {font-size: 1.47rem; letter-spacing: -.02em;}
+    [data-testid="stMetricLabel"] {line-height: 1.25;}
+    [data-testid="stTabs"] button[aria-selected="true"] {font-weight: 700;}
     [data-testid="stExpander"] {border-radius: 12px;}
     [data-testid="stMetricDelta"] {font-size: .9rem;}
+    .section-note {color:#586a74; font-size: .91rem;}
     @media (max-width: 760px) {
-        .block-container {padding-top: 1rem;}
-        [data-testid="stMetricValue"] {font-size: 1.3rem;}
+        .block-container {padding-top: .7rem;}
+        .planner-hero {padding: 20px;}
+        .planner-hero h1 {font-size: 1.5rem;}
+        [data-testid="stMetricValue"] {font-size: 1.22rem;}
     }
     </style>
     """,
@@ -174,11 +187,17 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
     return fig
 
 
-st.title("📈 Financial Future Planner")
-st.markdown("**Plan your debt. Stress-test your savings. Understand the trade-offs.**")
+st.markdown(
+    """<section class="planner-hero">
+      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER  /  v4</p>
+      <h1>Plan your money. Understand your future.</h1>
+      <p>Mortgage decisions, retirement readiness, lifetime spending and inflation - in one place.</p>
+    </section>""",
+    unsafe_allow_html=True,
+)
 st.caption(
-    "Enter a few key numbers, then explore repayment strategies, retirement readiness, "
-    "automatically generated scenarios, and interactive charts."
+    "Two planners | 4 loan inputs + 5 retirement inputs | automatic scenarios | PDF report. "
+    "Currency selection changes labels, not exchange rates."
 )
 st.sidebar.caption("Figures are estimates, not personalized financial advice.")
 st.sidebar.caption("No bank account, sign-in, API key, or external data connection is required.")
@@ -486,6 +505,20 @@ with retirement_tab:
         expected_return, inflation, volatility,
         simulations=int(simulations), target_probability=0.80, seed=42,
     )
+    # v4: detailed post-retirement cashflows, inflation views, and simulated spending limits.
+    retirement_monthly, retirement_yearly = retirement_life_schedule(
+        planned_balance, int(retirement_age), int(planning_age), target_income,
+        expected_return, inflation,
+    )
+    inflation_table = inflation_purchasing_power(
+        projection, int(current_age), target_income, inflation,
+    )
+    safe_spending = model_supported_monthly_spending(
+        int(current_age), int(retirement_age), int(planning_age),
+        retirement_savings, retirement_contribution, target_income,
+        expected_return, inflation, volatility,
+        simulations=int(simulations), seed=42,
+    )
     monthly_income_to_horizon = supported_income
     monthly_saving_to_horizon = needed_per_month
     additional_saving_to_horizon = max(0.0, needed_per_month - retirement_contribution)
@@ -555,6 +588,42 @@ with retirement_tab:
             "Success depends on the assumed market return distribution, constant inflation, and selected planning age."
         )
 
+    st.markdown("#### Model-supported monthly spending")
+    st.caption(
+        "How much monthly spending would be funded in at least 80%, 90%, or 95% of the "
+        "simulated market paths? These are scenario thresholds, not guaranteed safe withdrawals."
+    )
+    spending_levels = safe_spending["options"]
+    s80, s90, s95 = st.columns(3)
+    for col, (_, option) in zip((s80, s90, s95), spending_levels.iterrows()):
+        col.metric(
+            f"At least {option['Success Target']:.0%} modeled success",
+            money(option["Monthly Spending"]),
+        )
+    fig_spend = go.Figure()
+    fig_spend.add_trace(go.Bar(
+        x=[f"{p:.0%}" for p in spending_levels["Success Target"]],
+        y=spending_levels["Monthly Spending"],
+        marker_color=["#159579", "#2483a5", "#405f8b"],
+        name="Simulated spending capacity",
+        hovertemplate="%{x} success target: %{y:,.0f}<extra></extra>",
+    ))
+    fig_spend.add_hline(
+        y=target_income, line_dash="dot", line_color="#db773a",
+        annotation_text="Your target", annotation_position="top right",
+    )
+    fig_spend.update_xaxes(title="Required share of simulated paths")
+    st.plotly_chart(
+        plot_layout(fig_spend, height=310, y_label=f"Monthly spending ({CURRENCY}, today's money)"),
+        use_container_width=True,
+    )
+    st.caption(
+        f"Your entered {money(target_income)}/month is funded in "
+        f"{safe_spending['current_spending_success']:.1%} of these same simulated paths. "
+        "More conservative percentages generally imply a lower monthly spending limit. "
+        "The simulation assumes fixed inflation and independent annual market returns."
+    )
+
     st.markdown("#### Retirement trajectory and uncertainty")
     fan = simulation["fan"]
     fig = go.Figure()
@@ -592,6 +661,110 @@ with retirement_tab:
         "Constant-return income depletion",
         f"Around age {depletion_age:.1f}" if depletion_age is not None else f"Not through age {planning_age}",
     )
+
+    st.markdown("#### Retirement Life Simulator")
+    st.caption(
+        "At retirement, deposits stop. Your portfolio continues earning the modeled return "
+        "each month, then pays that month's living expenses. Figures below are in today's money."
+    )
+    yr_final = retirement_yearly.iloc[-1]
+    unpaid_total = float(retirement_yearly["Unfunded Spending"].sum())
+    first_unfunded = retirement_monthly.loc[retirement_monthly["Unfunded Spending"] > 0.01]
+    if first_unfunded.empty:
+        first_unfunded_label = f"Not by age {planning_age}"
+    else:
+        first_unfunded_label = f"Age {float(first_unfunded.iloc[0]['Age']):.1f}"
+    l1, l2, l3, l4 = st.columns(4)
+    l1.metric(f"Balance at age {planning_age}", money(float(yr_final["Ending Balance"])))
+    l2.metric("Withdrawals actually funded", money(float(yr_final["Cumulative Withdrawals"])))
+    l3.metric("First shortfall", first_unfunded_label)
+    l4.metric("Unfunded lifetime spending", money(unpaid_total))
+
+    life_age = [int(retirement_age)] + retirement_yearly["Age"].tolist()
+    life_bal = [planned_balance] + retirement_yearly["Ending Balance"].tolist()
+    fig_life = go.Figure()
+    fig_life.add_trace(go.Scatter(
+        x=life_age, y=life_bal, mode="lines", name="Retirement balance",
+        line=dict(color="#128c79", width=3), fill="tozeroy", fillcolor="rgba(18,140,121,.10)",
+        hovertemplate="Age %{x}: %{y:,.0f}<extra></extra>",
+    ))
+    fig_life.update_xaxes(title="Age during retirement")
+    st.plotly_chart(
+        plot_layout(fig_life, height=355, y_label=f"Remaining portfolio ({CURRENCY}, today's money)"),
+        use_container_width=True,
+    )
+    st.markdown("**Yearly retirement cash flow**")
+    show_life = retirement_yearly.copy()
+    st.dataframe(
+        show_life.style.format({
+            "Starting Balance": "{:,.0f}", "Investment Growth": "{:,.0f}",
+            "Planned Spending": "{:,.0f}", "Actual Withdrawals": "{:,.0f}",
+            "Unfunded Spending": "{:,.0f}", "Ending Balance": "{:,.0f}",
+            "Cumulative Withdrawals": "{:,.0f}",
+        }),
+        use_container_width=True, hide_index=True, height=300,
+    )
+    d1, d2 = st.columns(2)
+    with d1:
+        st.download_button(
+            "⬇ Download annual retirement cash flow CSV",
+            data=retirement_yearly.to_csv(index=False).encode("utf-8-sig"),
+            file_name="retirement_life_annual.csv", mime="text/csv",
+        )
+    with d2:
+        st.download_button(
+            "⬇ Download monthly retirement cash flow CSV",
+            data=retirement_monthly.to_csv(index=False).encode("utf-8-sig"),
+            file_name="retirement_life_monthly.csv", mime="text/csv",
+        )
+
+    st.markdown("#### Inflation & Purchasing Power")
+    st.caption(
+        "Today's money shows purchasing power. Future (nominal) money includes inflation. "
+        "Changing display units does not create real investment gains or change the retirement outcome."
+    )
+    at_retirement = inflation_table.loc[inflation_table["Age"] == int(retirement_age)].iloc[0]
+    at_horizon = inflation_table.iloc[-1]
+    pi1, pi2, pi3 = st.columns(3)
+    pi1.metric("Target spending · today", money(target_income))
+    pi2.metric(f"Same spending · at age {retirement_age}", money(float(at_retirement["Monthly Spending - Future Money"])))
+    pi3.metric(f"Same spending · at age {planning_age}", money(float(at_horizon["Monthly Spending - Future Money"])))
+    chart_a, chart_b = st.columns(2)
+    with chart_a:
+        fig_inflation = go.Figure()
+        fig_inflation.add_trace(go.Scatter(
+            x=inflation_table["Age"], y=inflation_table["Monthly Spending - Today's Money"],
+            name="Today's purchasing power", line=dict(color="#138a7b", width=3),
+        ))
+        fig_inflation.add_trace(go.Scatter(
+            x=inflation_table["Age"], y=inflation_table["Monthly Spending - Future Money"],
+            name="Future nominal cost", line=dict(color="#d47b37", width=3),
+        ))
+        fig_inflation.update_xaxes(title="Age")
+        st.plotly_chart(plot_layout(fig_inflation, height=330, y_label=f"Monthly spending ({CURRENCY})"), use_container_width=True)
+    with chart_b:
+        fig_power = go.Figure()
+        fig_power.add_trace(go.Scatter(
+            x=inflation_table["Age"], y=inflation_table["Portfolio - Today's Money"],
+            name="Portfolio · real", line=dict(color="#138a7b", width=3),
+        ))
+        fig_power.add_trace(go.Scatter(
+            x=inflation_table["Age"], y=inflation_table["Portfolio - Future Money"],
+            name="Portfolio · nominal", line=dict(color="#3a70a2", width=3),
+        ))
+        fig_power.update_xaxes(title="Age")
+        st.plotly_chart(plot_layout(fig_power, height=330, y_label=f"Projected portfolio ({CURRENCY})"), use_container_width=True)
+    with st.expander("See inflation-adjusted values by age"):
+        money_cols = [col for col in inflation_table if "Portfolio - " in col or "Monthly Spending - " in col]
+        fmt = {name: "{:,.0f}" for name in money_cols}
+        fmt["Inflation Multiplier"] = "{:.3f}x"
+        fmt["Purchasing Power of One Nominal Unit"] = "{:.3f}"
+        st.dataframe(inflation_table.style.format(fmt), use_container_width=True, hide_index=True)
+        st.download_button(
+            "⬇ Download inflation and purchasing power CSV",
+            data=inflation_table.to_csv(index=False).encode("utf-8-sig"),
+            file_name="inflation_purchasing_power.csv", mime="text/csv",
+        )
 
     st.markdown("#### Automatic retirement what-if scenarios")
     show_retirement_scenarios = retirement_scenarios.copy()
@@ -647,6 +820,11 @@ with retirement_tab:
         f"(an additional {money(savings_goal_80['monthly_increase_needed'])} compared with the current plan)."
     )
     retirement_insights.append(
+        f"Across {int(simulations):,} sampled market paths, modeled spending limits for 80%, 90% "
+        f"and 95% success are {', '.join(money(v) for v in safe_spending['options']['Monthly Spending'])} "
+        "per month in today's purchasing power. These values are not guaranteed safe withdrawals."
+    )
+    retirement_insights.append(
         "The model holds spending and saving constant in today's purchasing power, and ignores "
         "taxes, fees, pensions, flexible spending, and variable inflation."
     )
@@ -683,6 +861,18 @@ For each path, annual returns vary; monthly contributions continue only until re
 **5. Savings goal for 80% simulated spending success**
 
 The app calculates, for each return path, the retirement capital needed to pay every withdrawal and the monthly contribution required to build it. The 80th percentile of these path-by-path contributions is the approximately 80% success savings target. The simulated probability is not a guarantee.
+
+**6. Retirement Life Simulator**
+
+Each month after retirement: `closing balance = max(0, opening balance * (1 + real monthly return) - actual withdrawal)`. The app records investment growth, withdrawals actually funded, and any spending shortfall. Contributions are zero in retirement.
+
+**7. Model-supported spending (80%, 90%, 95%)**
+
+For each Monte Carlo path, the app computes the maximum constant-real monthly withdrawal the projected retirement savings could support through the planning age. The displayed threshold is a conservative empirical percentile. These are **model scenarios, not guaranteed safe withdrawal rates**.
+
+**8. Purchasing power**
+
+`Nominal future amount = amount in today's purchasing power * (1 + inflation) ^ years`. Both views describe the same real plan, not two different investment results.
 """)
 
     st.markdown("#### Year-by-year balance projection")
@@ -842,6 +1032,9 @@ report_data = generate_pdf_report(
     loan_insights=loan_insights,
     retirement_insights=retirement_insights,
     investment_insights=investment_insights,
+    retirement_life_df=retirement_yearly,
+    safe_spending=safe_spending,
+    inflation_df=inflation_table,
 )
 with st.sidebar:
     st.divider()
