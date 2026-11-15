@@ -48,7 +48,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* v4.2 visual refresh: aligned inputs and fewer redundant charts. */
+    /* v4.3 visual refresh: spacious full-width charts and simpler chart navigation. */
     :root {--ink:#142c41;--ocean:#047e8d;--mint:#16b59b;--edge:#dce8ed;}
     html,body,[data-testid="stAppViewContainer"] {font-family: Inter, "Segoe UI", Arial, sans-serif;}
     .block-container {max-width: 1380px; padding-top: 1.1rem; padding-bottom: 3rem;}
@@ -65,7 +65,12 @@ st.markdown(
     .section-intro {font-size:.9rem;color:#627989;margin:0 0 16px;}
     .chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0 0;}
     .chip{border:1px solid rgba(255,255,255,.28);padding:5px 10px;border-radius:30px;font-size:.78rem;color:#e3fbf9;background:rgba(255,255,255,.11);}
-    .viz-label{font-size:.90rem;font-weight:750;color:#1e465a;margin:5px 0 8px;}
+    .viz-label{font-size:1.02rem;font-weight:750;color:#1e465a;margin:16px 0 5px;}
+    /* Charts are given their own breathing space and no longer compete in narrow columns. */
+    [data-testid="stPlotlyChart"] {margin:12px 0 20px;}
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {gap: 8px;}
+    [data-testid="stTabs"] button {border-radius:9px 9px 0 0;}
+
 
     h1, h2, h3, h4 {letter-spacing: -.026em;}
     .planner-hero {
@@ -199,10 +204,10 @@ def months_as_text(months: int) -> str:
 def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -> go.Figure:
     fig.update_layout(
         height=height,
-        margin=dict(l=8, r=12, t=15, b=12),
+        margin=dict(l=18, r=18, t=40, b=30),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", y=1.15, x=0, font=dict(size=11)),
+        legend=dict(orientation="h", y=1.13, x=0, font=dict(size=12)),
         hovermode="x unified",
         font=dict(family="Arial, sans-serif", size=12, color="#334e62"),
         colorway=["#0d8f93", "#335e98", "#f29c56", "#8675bf", "#a4b8c7"],
@@ -304,46 +309,65 @@ with loan_tab:
             "Payoff assumes the first scheduled payment occurs one month after the loan start date."
         )
 
+    # Keep charts separated vertically so nothing is squeezed into narrow columns.
+    # Cost allocation is a horizontal stacked bar: easier to read than a small donut.
     st.markdown('<p class="section-kicker">Your mortgage, visualized</p>', unsafe_allow_html=True)
-    st.markdown("#### Payment breakdown & interest over time")
-    st.caption("See the total cost of borrowing and how making additional principal payments changes that cost.")
-    vd1, vd2 = st.columns([0.85, 1.15])
-    with vd1:
-        st.markdown('<div class="viz-label">Where your payments go · with extra payments</div>', unsafe_allow_html=True)
-        allocation = go.Figure(go.Pie(
-            labels=["Original principal", "Loan interest"],
-            values=[loan_amount, chosen_stats["interest"]],
-            hole=0.68, sort=False, direction="clockwise",
-            marker=dict(colors=["#098b95", "#f2a36b"], line=dict(color="#fff", width=3)),
-            textinfo="percent", textposition="outside",
-            hovertemplate="%{label}: %{value:,.0f} ( %{percent} )<extra></extra>",
-        ))
-        allocation.update_layout(
-            annotations=[dict(text="TOTAL PAID", x=.5, y=.54, font=dict(size=11,color="#637b8e"),showarrow=False),
-                         dict(text=f"{CURRENCY}{chosen_stats['paid']:,.0f}", x=.5, y=.46,
-                              font=dict(size=17,color="#173a4e"),showarrow=False)],
-            showlegend=True, legend=dict(orientation="h", x=.5, xanchor="center", y=-.08),
-        )
-        st.plotly_chart(plot_layout(allocation, height=322), use_container_width=True)
-    with vd2:
-        st.markdown('<div class="viz-label">Cumulative interest paid</div>', unsafe_allow_html=True)
-        fig_interest = go.Figure()
-        fig_interest.add_trace(go.Scatter(
-            x=[0]+standard["Month"].tolist(),y=[0]+standard["Cumulative Interest"].tolist(),
-            name="Standard loan",mode="lines",line=dict(color="#8295a8",width=3),
-            hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>"
-        ))
-        fig_interest.add_trace(go.Scatter(
-            x=[0]+chosen["Month"].tolist(),y=[0]+chosen["Cumulative Interest"].tolist(),
-            name="With extra payments",mode="lines",line=dict(color="#0d9b92",width=3),
-            hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>"
-        ))
-        fig_interest.update_xaxes(title="Months from loan start")
-        st.plotly_chart(plot_layout(fig_interest, height=322, y_label=f"Interest paid ({CURRENCY})"),use_container_width=True)
-    st.markdown("#### Repayment charts")
-    left, right = st.columns([1.2, 1])
-    with left:
-        st.markdown("**Remaining balance**")
+    st.markdown("#### Loan cost at a glance")
+    st.caption("Your original principal and the interest you will pay with the selected extra payment.")
+    loan_total = loan_amount + chosen_stats["interest"]
+    interest_share = chosen_stats["interest"] / loan_total if loan_total > 0 else 0
+    principal_share = loan_amount / loan_total if loan_total > 0 else 0
+    allocation = go.Figure()
+    allocation.add_trace(go.Bar(
+        y=["Cost allocation"], x=[loan_amount], orientation="h",
+        name="Original principal", marker_color="#078f96",
+        text=f"Principal {principal_share:.1%}", textposition="inside",
+        insidetextanchor="middle",
+        hovertemplate=f"Original principal: {CURRENCY}{loan_amount:,.2f}<extra></extra>",
+    ))
+    allocation.add_trace(go.Bar(
+        y=["Cost allocation"], x=[chosen_stats["interest"]], orientation="h",
+        name="Loan interest", marker_color="#f2a36b",
+        text=f"Interest {interest_share:.1%}" if interest_share >= 0.12 else "",
+        textposition="inside", insidetextanchor="middle",
+        hovertemplate=f"Total interest: {CURRENCY}{chosen_stats['interest']:,.2f}<extra></extra>",
+    ))
+    allocation.update_layout(barmode="stack", bargap=0.25, height=170,
+                             uniformtext_minsize=11, uniformtext_mode="hide")
+    allocation.update_xaxes(visible=False, range=[0, loan_total * 1.02] if loan_total > 0 else None)
+    allocation.update_yaxes(visible=False, fixedrange=True)
+    st.plotly_chart(plot_layout(allocation, height=170), use_container_width=True)
+    st.caption(
+        f"Total repaid with extra payments: **{money(chosen_stats['paid'])}** · "
+        f"Original principal: **{money(loan_amount)}** · "
+        f"Interest: **{money(chosen_stats['interest'])}**. "
+        "The bar represents principal and interest only (not taxes, insurance or PMI)."
+    )
+
+    st.markdown("#### Interest accumulated over the loan")
+    st.caption("Compare total interest paid over time with and without extra principal payments.")
+    fig_interest = go.Figure()
+    fig_interest.add_trace(go.Scatter(
+        x=[0] + standard["Month"].tolist(), y=[0] + standard["Cumulative Interest"].tolist(),
+        name="Standard loan", mode="lines", line=dict(color="#8295a8", width=3),
+        hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>",
+    ))
+    fig_interest.add_trace(go.Scatter(
+        x=[0] + chosen["Month"].tolist(), y=[0] + chosen["Cumulative Interest"].tolist(),
+        name="With extra payments", mode="lines", line=dict(color="#0d9b92", width=3),
+        hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>",
+    ))
+    fig_interest.update_xaxes(title="Months from loan start")
+    st.plotly_chart(
+        plot_layout(fig_interest, height=365, y_label=f"Interest paid ({CURRENCY})"),
+        use_container_width=True,
+    )
+    st.divider()
+
+    st.markdown("#### Repayment timeline")
+    st.caption("Switch views to explore remaining debt or how each year's payments are allocated.")
+    balance_tab, payment_mix_tab = st.tabs(["Remaining loan balance", "Annual principal & interest"])
+    with balance_tab:
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=[0] + standard["Month"].tolist(),
@@ -358,16 +382,15 @@ with loan_tab:
             name="With extra payment",
         ))
         fig.update_xaxes(title="Months since loan start")
-        st.plotly_chart(plot_layout(fig, y_label=f"Balance ({CURRENCY})"), use_container_width=True)
-    with right:
-        st.markdown("**Annual principal versus interest · standard loan**")
+        st.plotly_chart(plot_layout(fig, height=360, y_label=f"Balance ({CURRENCY})"), use_container_width=True)
+    with payment_mix_tab:
         annual = standard.groupby("Year", as_index=False)[["Principal", "Interest"]].sum()
         fig = go.Figure()
         fig.add_trace(go.Bar(x=annual["Year"], y=annual["Principal"], name="Principal", marker_color="#10b981"))
         fig.add_trace(go.Bar(x=annual["Year"], y=annual["Interest"], name="Interest", marker_color="#f59e0b"))
         fig.update_layout(barmode="stack")
         fig.update_xaxes(title="Loan year")
-        st.plotly_chart(plot_layout(fig, y_label=f"Annual payment ({CURRENCY})"), use_container_width=True)
+        st.plotly_chart(plot_layout(fig, height=360, y_label=f"Annual payment ({CURRENCY})"), use_container_width=True)
 
     st.markdown("#### Automatic extra-payment scenarios")
     extra_scenarios = annual_loan_scenario(
@@ -860,8 +883,8 @@ with retirement_tab:
     pi1.metric("Target spending · today", money(target_income))
     pi2.metric(f"Same spending · at age {retirement_age}", money(float(at_retirement["Monthly Spending - Future Money"])))
     pi3.metric(f"Same spending · at age {planning_age}", money(float(at_horizon["Monthly Spending - Future Money"])))
-    chart_a, chart_b = st.columns(2)
-    with chart_a:
+    spending_tab, portfolio_tab = st.tabs(["Monthly spending: real vs. nominal", "Portfolio: real vs. nominal"])
+    with spending_tab:
         fig_inflation = go.Figure()
         fig_inflation.add_trace(go.Scatter(
             x=inflation_table["Age"], y=inflation_table["Monthly Spending - Today's Money"],
@@ -872,8 +895,8 @@ with retirement_tab:
             name="Future nominal cost", line=dict(color="#d47b37", width=3),
         ))
         fig_inflation.update_xaxes(title="Age")
-        st.plotly_chart(plot_layout(fig_inflation, height=330, y_label=f"Monthly spending ({CURRENCY})"), use_container_width=True)
-    with chart_b:
+        st.plotly_chart(plot_layout(fig_inflation, height=365, y_label=f"Monthly spending ({CURRENCY})"), use_container_width=True)
+    with portfolio_tab:
         fig_power = go.Figure()
         fig_power.add_trace(go.Scatter(
             x=inflation_table["Age"], y=inflation_table["Portfolio - Today's Money"],
@@ -884,7 +907,7 @@ with retirement_tab:
             name="Portfolio · nominal", line=dict(color="#3a70a2", width=3),
         ))
         fig_power.update_xaxes(title="Age")
-        st.plotly_chart(plot_layout(fig_power, height=330, y_label=f"Projected portfolio ({CURRENCY})"), use_container_width=True)
+        st.plotly_chart(plot_layout(fig_power, height=365, y_label=f"Projected portfolio ({CURRENCY})"), use_container_width=True)
     with st.expander("See inflation-adjusted values by age"):
         money_cols = [col for col in inflation_table if "Portfolio - " in col or "Monthly Spending - " in col]
         fmt = {name: "{:,.0f}" for name in money_cols}
