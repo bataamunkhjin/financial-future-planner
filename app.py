@@ -36,7 +36,7 @@ from finance import (
     model_supported_monthly_spending,
 )
 from report import generate_pdf_report
-from portfolio_ui import render_investment_tab, cached_fx
+from portfolio_ui import render_investment_tab
 from savings_comparison import compare_bank_and_investment
 from risk_comparison import compare_savings_investing_risks
 
@@ -254,7 +254,7 @@ st.caption(
     "Loan/retirement currencies change labels only; investments use quoted USD prices and FX when available."
 )
 st.sidebar.caption("Figures are estimates, not personalized financial advice.")
-st.sidebar.caption("Loans and retirement work offline; investment live quotes require Yahoo Finance access. No sign-in or API key is needed.")
+st.sidebar.caption("All three planners work offline. Investment prices and return assumptions are entered by you; no sign-in or API key is needed.")
 
 loan_tab, retirement_tab, investment_tab = st.tabs(["🏠 Mortgage / Loan Planner", "🌱 Retirement Planner", "📊 Investments"])
 
@@ -1201,32 +1201,20 @@ with retirement_tab:
     linked_result = st.session_state.get("portfolio_result")
     linked_value = None
     linked_return = None
-    linked_coverage = 0.0
     linked_volatility = None
-    if isinstance(linked_result, dict):
+    # Manual investment values already use the selected currency; no exchange
+    # rates are fetched or silently inferred. A currency change invalidates
+    # the old linked valuation until the user analyzes again.
+    if isinstance(linked_result, dict) and linked_result.get("currency_code") == currency_choice.split(" ")[0]:
         linked_summary = linked_result.get("summary") or {}
-        linked_hist = linked_result.get("history") or {}
-        linked_metrics = linked_hist.get("metrics") or {}
-        linked_coverage = float(linked_summary.get("risk_coverage", 0.0))
-        usd_value = float(linked_summary.get("total_value", 0.0))
-        linked_fx = 1.0
-        if currency_choice.split(" ")[0] != "USD":
-            try:
-                linked_fx = cached_fx(currency_choice.split(" ")[0])
-            except Exception:
-                linked_fx = None
-        if linked_fx is not None and usd_value > 0:
-            linked_value = usd_value * float(linked_fx)
-        if (linked_metrics and linked_coverage >= 0.50
-                and int(linked_metrics.get("weeks", 0)) >= 26):
-            historical_rate = 100*float(linked_metrics["annualized_return"])
-            if -30.0 <= historical_rate <= 30.0:
-                linked_return = historical_rate
-        if (linked_metrics and linked_coverage >= 0.80
-                and int(linked_metrics.get("weeks", 0)) >= 26):
-            historical_vol_pct = float(linked_metrics.get("volatility", 0.0)) * 100.0
-            if 0.0 < historical_vol_pct <= 60.0:
-                linked_volatility = historical_vol_pct
+        if float(linked_summary.get("total_value", 0.0)) > 0:
+            linked_value = float(linked_summary["total_value"])
+        rate = float(linked_summary.get("expected_return", float("nan")))
+        if -30 <= rate <= 30:
+            linked_return = rate
+        vol = float(linked_summary.get("modeled_volatility", float("nan")))
+        if 0 <= vol <= 60:
+            linked_volatility = vol
 
     with st.expander("Optional comparison assumptions", expanded=False):
         st.caption("These settings affect only this comparison, not your existing retirement projections.")
@@ -1243,18 +1231,18 @@ with retirement_tab:
                 "Both balances (only if they are separate funds)",
             ])
         savings_source = st.selectbox("Starting money for this comparison", savings_sources,
-                                      help="Portfolio value is converted from USD using the latest available FX estimate. Avoid counting the same investments twice.")
+                                      help="Use the portfolio entered in the same selected currency. Avoid counting the same investments twice.")
         return_sources = ["Your retirement expected-return assumption"]
         if linked_return is not None:
-            return_sources.append("Historical listed-portfolio return (illustrative only)")
+            return_sources.append("Your portfolio assumed return (illustrative)")
         return_source = st.selectbox("Investing return for this comparison", return_sources,
-                                     help="A historical portfolio return is NOT a prediction; market returns fluctuate. Only listed assets with available history are included.")
+                                     help="The portfolio return is a weighted user assumption, NOT a measured return or prediction.")
         risk_vol_sources = ["Retirement volatility assumption"]
         if linked_volatility is not None:
-            risk_vol_sources.append("Historical listed-portfolio volatility (illustrative)")
+            risk_vol_sources.append("Your portfolio modeled volatility (illustrative)")
         risk_vol_source = st.selectbox(
             "Volatility used for risk scenarios", risk_vol_sources,
-            help="The first option reuses your existing retirement setting. Historical volatility is based only on listed holdings with overlapping price history; neither forecasts future losses.",
+            help="The portfolio volatility is calculated from your entered risk estimates and a simplifying correlation assumption; neither setting predicts future losses.",
         )
 
     compare_initial = float(retirement_savings)
@@ -1262,7 +1250,7 @@ with retirement_tab:
         compare_initial = float(linked_value)
     elif savings_source.startswith("Both") and linked_value is not None:
         compare_initial += float(linked_value)
-    compare_investing_rate = float(linked_return if return_source.startswith("Historical") and linked_return is not None else expected_return)
+    compare_investing_rate = float(linked_return if return_source.startswith("Your portfolio") and linked_return is not None else expected_return)
     comparison_result = compare_bank_and_investment(
         current_age=int(current_age), retirement_age=int(retirement_age),
         planning_age=int(planning_age), starting_balance=compare_initial,
@@ -1271,7 +1259,7 @@ with retirement_tab:
         inflation_pct=float(inflation),
     )
     comparison_volatility = (
-        linked_volatility if risk_vol_source.startswith("Historical")
+        linked_volatility if risk_vol_source.startswith("Your portfolio")
         and linked_volatility is not None else float(volatility)
     )
     comparison_risk = compare_savings_investing_risks(
@@ -1424,20 +1412,20 @@ with retirement_tab:
         "Constant returns, no fees/taxes or FX risk; bank rates may change and investments can lose value. "
         "This comparison is illustrative, not a risk-adjusted recommendation."
     )
-    if linked_result:
+    if isinstance(linked_result, dict):
         if linked_value is not None:
             st.info(
-                f"Portfolio connection available: your current investment valuation is {money(linked_value)} "
-                f"at the latest available USD/{currency_choice[:3]} conversion. "
-                "Choose a portfolio starting-balance option above only if it doesn't double-count your retirement savings. "
-                f"Historical risk metrics cover {linked_coverage:.0%} of your portfolio."
+                f"Offline portfolio link available: you entered {money(linked_value)} of investments "
+                "in the selected currency. Choose this balance only if you will not count it twice "
+                "in your retirement savings."
             )
         else:
-            st.warning("The portfolio was analyzed, but no reliable currency conversion was available. "
-                       "Its USD value is not combined with retirement balances in another currency.")
-        if return_source.startswith("Historical"):
-            st.warning("You selected a historical return from the listed subset of your portfolio. "
-                       "It may not represent the whole portfolio or future returns; treat this as a stress scenario only.")
+            st.info("Re-analyze your Investments tab using the selected currency to connect it "
+                    "with this comparison. No exchange conversion is performed.")
+        if return_source.startswith("Your portfolio"):
+            st.caption("The linked portfolio return is a weighted **assumption you entered**, "
+                       "not an observed historical return or a prediction.")
+
     st.download_button(
         "⬇ Download bank vs investing CSV",
         data=comparison_result["annual"].to_csv(index=False).encode("utf-8-sig"),

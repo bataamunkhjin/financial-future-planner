@@ -1,251 +1,165 @@
-"""Independent multi-asset portfolio calculation engine.
+"""Offline, assumption-based multi-asset portfolio analysis.
 
-Current holdings are valued in USD. Historical return/risk uses ONLY assets with
-reliable weekly market series. Manually priced assets are included in total
-valuation and allocation but excluded from historical risk and return charts.
+No internet access, market history, or exchange conversion. All monetary
+values use the currency selected in the main Streamlit app. The scenario model
+is illustrative, not a calibrated portfolio risk or price forecast.
 """
 from __future__ import annotations
 
 import math
-import re
-from typing import Mapping
-
 import numpy as np
 import pandas as pd
 
-LISTED_TYPES = (
-    "Stock", "Stock ETF", "Bond ETF", "Crypto", "Commodity ETF",
-    "REIT / Property ETF", "Other listed",
+ASSET_TYPES = (
+    "Stock / ETF", "Bond / Bond ETF", "Crypto", "Property / REIT",
+    "Gold / Commodity", "Cash / Deposit", "Private investment", "Other",
 )
-MANUAL_TYPES = ("Direct bond", "Property", "Cash", "Private investment", "Other manual")
-ASSET_TYPES = LISTED_TYPES + MANUAL_TYPES
-SYMBOL_RE = re.compile(r"^[A-Za-z0-9^][A-Za-z0-9.\-^=]{0,22}$")
 
 
-def _number(value, name: str, *, required: bool = False) -> float | None:
+def _amount(value, field, *, optional=False):
     if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)) or str(value).strip() == "":
-        if required:
-            raise ValueError(f"{name} is required.")
-        return None
-    if isinstance(value, str):
-        value = value.replace(",", "").replace("$", "").strip()
+        if optional:
+            return math.nan
+        raise ValueError(f"{field} is required.")
     try:
-        numeric = float(value)
+        amount = float(str(value).replace(",", "").strip())
     except (ValueError, TypeError) as exc:
-        raise ValueError(f"{name} must be a number.") from exc
-    if not math.isfinite(numeric) or numeric < 0:
-        raise ValueError(f"{name} must be a finite, nonnegative number.")
-    return numeric
+        raise ValueError(f"{field} must be a valid number.") from exc
+    if not math.isfinite(amount):
+        raise ValueError(f"{field} must be finite.")
+    return amount
 
 
-def prepare_holdings(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean st.data_editor rows, preserving optional purchase costs and manual prices."""
-    required = {"Asset type", "Ticker / name", "Units", "Avg buy / unit", "Current price (manual)"}
-    if not required.issubset(df.columns):
-        raise ValueError("Portfolio table is missing required columns.")
-    holdings = []
-    for i, row in df.iterrows():
-        kind = str(row["Asset type"] or "").strip()
-        title = str(row["Ticker / name"] or "").strip()
-        if (not title or title.lower() == "nan") and pd.isna(row["Units"]):
-            continue  # A blank data-editor row, not an investment.
-        if kind not in ASSET_TYPES:
-            raise ValueError(f"Row {i + 1}: choose a supported asset type.")
-        if not title or title.lower() == "nan":
-            raise ValueError(f"Row {i + 1}: enter a ticker or asset name.")
-        if kind in LISTED_TYPES:
-            title = title.upper()
-            if not SYMBOL_RE.fullmatch(title):
-                raise ValueError(f"Row {i + 1}: invalid market ticker '{title}'.")
-        units = _number(row["Units"], f"Row {i+1} units", required=True)
-        if units <= 0:
-            raise ValueError(f"Row {i+1}: units must be greater than zero.")
-        avg_cost = _number(row["Avg buy / unit"], f"Row {i+1} average buy")
-        price = _number(row["Current price (manual)"], f"Row {i+1} manual price", required=kind in MANUAL_TYPES)
-        holdings.append({"asset_type": kind, "ticker": title, "units": units,
-                         "avg_cost": avg_cost, "manual_price": price,
-                         "is_listed": kind in LISTED_TYPES})
-    if not holdings:
-        raise ValueError("Add at least one investment to analyze.")
-    if len(holdings) > 30:
-        raise ValueError("Use at most 30 investments for a responsive dashboard.")
-    return pd.DataFrame(holdings)
+def analyze_holdings(entries: pd.DataFrame, correlation: float = 0.35) -> tuple[pd.DataFrame, dict]:
+    """Value holdings and compute weighted assumption-based expected return/risk.
 
-
-def position_valuation(holdings: pd.DataFrame,
-                       quotes: Mapping[str, pd.DataFrame]) -> tuple[pd.DataFrame, list[str]]:
-    """Calculate present valuations, excluding inaccessible live tickers explicitly."""
-    positions = []
-    missing = []
-    for _, h in holdings.iterrows():
-        symbol = str(h["ticker"])
-        if h["is_listed"]:
-            history = quotes.get(symbol)
-            if history is None or history.empty or "close" not in history:
-                missing.append(symbol)
-                continue
-            prices = pd.to_numeric(history["close"], errors="coerce").dropna()
-            prices = prices[prices > 0]
-            if prices.empty:
-                missing.append(symbol)
-                continue
-            unit_price = float(prices.iloc[-1])
-            quote_date = str(pd.Timestamp(prices.index[-1]).date())
-            source = "Market"
-        else:
-            unit_price = float(h["manual_price"])
-            quote_date = "User entered"
-            source = "Manual"
-        value = float(h["units"]) * unit_price
-        avg_cost = h["avg_cost"]
-        cost_basis = float(h["units"]) * float(avg_cost) if pd.notna(avg_cost) else math.nan
-        positions.append({
-            "Asset": symbol, "Class": h["asset_type"], "Units": float(h["units"]),
-            "Unit price USD": unit_price, "Value USD": value,
-            "Cost basis USD": cost_basis,
-            "Unrealized P/L USD": value-cost_basis if math.isfinite(cost_basis) else math.nan,
-            "Pricing": source, "Quote date": quote_date,
-        })
-    positions_df = pd.DataFrame(positions)
-    if not positions_df.empty:
-        total = float(positions_df["Value USD"].sum())
-        positions_df["Weight %"] = 100*positions_df["Value USD"]/total if total > 0 else 0.0
-    return positions_df, sorted(set(missing))
-
-
-def market_return_history(holdings: pd.DataFrame,
-                          quotes: Mapping[str, pd.DataFrame],
-                          benchmark: pd.DataFrame | None = None,
-                          min_weeks: int = 12) -> dict:
-    """Historical buy-and-hold proxy for *listed holdings only* at fixed units.
-
-    Adjusted closes measure price/dividend history; scale the series to the
-    actual current close for an intuitive valuation axis. Manual holdings do
-    not receive an invented historical price path. Weekly sampling gives
-    comparable dates for markets that trade on different days (crypto/ETFs).
+    Uniform cross-asset correlation is an explicit simplifying assumption,
+    NOT an estimated covariance matrix or observed historical correlation.
     """
-    series = {}
-    for ticker, grp in holdings.loc[holdings["is_listed"]].groupby("ticker"):
-        history = quotes.get(ticker)
-        if history is None or history.empty:
+    required = {"Asset class", "Investment", "Units", "Current price / unit",
+                "Avg buy / unit", "Expected return %", "Volatility %"}
+    if not required.issubset(entries.columns):
+        raise ValueError("The holdings table is missing required columns.")
+    if not math.isfinite(correlation) or not 0 <= correlation <= 1:
+        raise ValueError("Assumed correlation must be between 0 and 1.")
+    rows = []
+    for index, entry in entries.iterrows():
+        name = str(entry["Investment"] if pd.notna(entry["Investment"]) else "").strip()
+        kind = str(entry["Asset class"] if pd.notna(entry["Asset class"]) else "").strip()
+        if not name and pd.isna(entry["Units"]):
             continue
-        raw = history.get("adjusted", history.get("close"))
-        if raw is None:
-            continue
-        adj = pd.to_numeric(raw, errors="coerce").dropna()
-        adj = adj[adj > 0]
-        close = pd.to_numeric(history["close"], errors="coerce").dropna()
-        close = close[close > 0]
-        if adj.size < 12 or close.empty:
-            continue
-        adj.index = pd.DatetimeIndex(adj.index).tz_localize(None)
-        weekly = adj.resample("W-FRI").last().dropna()
-        if weekly.size < min_weeks:
-            continue
-        qty = float(grp["units"].sum())
-        # Investment series is in current USD price units at the same quantity.
-        # Scaling adjusted history avoids treating accumulated dividends as price.
-        scaled = weekly / float(adj.iloc[-1]) * float(close.iloc[-1]) * qty
-        series[ticker] = scaled.rename(ticker)
-    result = {"weekly_values": pd.DataFrame(), "weekly_portfolio": pd.Series(dtype=float),
-              "weekly_returns": pd.Series(dtype=float), "benchmark_index": None,
-              "correlations": pd.DataFrame(), "metrics": {}, "tickers_used": []}
-    if not series:
-        return result
-    frame = pd.concat(series, axis=1).dropna(how="any").sort_index()
-    if len(frame) < min_weeks:
-        return result
-    # Portfolio constructed as though current positions were held for this period.
-    weekly_portfolio = frame.sum(axis=1)
-    weekly_returns = weekly_portfolio.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
-    if len(weekly_returns) < min_weeks - 1 or weekly_portfolio.iloc[0] <= 0:
-        return result
-    weeks = len(weekly_returns)
-    vol = float(weekly_returns.std(ddof=1) * math.sqrt(52)) if weeks > 1 else 0.0
-    annualized_return = (float(weekly_portfolio.iloc[-1]) / float(weekly_portfolio.iloc[0])) ** (52/weeks)-1
-    peak = weekly_portfolio.cummax()
-    drawdown = weekly_portfolio / peak-1
-    var95 = max(0.0, -float(np.quantile(weekly_returns, .05)))
-    losses = weekly_returns[weekly_returns <= np.quantile(weekly_returns, .05)]
-    cvar = max(0.0, -float(losses.mean())) if not losses.empty else 0.0
-    corr = frame.pct_change().dropna().corr() if frame.shape[1] > 1 else pd.DataFrame()
-    benchmark_index = None
-    if benchmark is not None and not benchmark.empty:
-        bm = benchmark.get("adjusted", benchmark.get("close"))
-        if bm is not None:
-            bm = pd.to_numeric(bm, errors="coerce").dropna()
-            bm.index = pd.DatetimeIndex(bm.index).tz_localize(None)
-            bm_weekly = bm.resample("W-FRI").last().dropna()
-            aligned = bm_weekly.reindex(frame.index).dropna()
-            if len(aligned) >= min_weeks and aligned.iloc[0] > 0:
-                benchmark_index = 100*aligned/aligned.iloc[0]
-    result.update({
-        "weekly_values": frame,
-        "weekly_portfolio": weekly_portfolio,
-        "weekly_returns": weekly_returns,
-        "correlations": corr,
-        "benchmark_index": benchmark_index,
-        "tickers_used": list(frame.columns),
-        "metrics": {"annualized_return": float(annualized_return),
-                    "volatility": vol,
-                    "max_drawdown": float(drawdown.min()),
-                    "var95_week": var95,
-                    "cvar95_week": cvar,
-                    "weeks": weeks,
-                    "worst_week": float(weekly_returns.min()),
-                    "best_week": float(weekly_returns.max())},
-    })
-    return result
+        if not name or kind not in ASSET_TYPES:
+            raise ValueError(f"Row {index+1}: select an asset class and enter an investment name.")
+        units = _amount(entry["Units"], f"Row {index+1} units")
+        price = _amount(entry["Current price / unit"], f"Row {index+1} current unit price")
+        cost = _amount(entry["Avg buy / unit"], f"Row {index+1} average purchase price", optional=True)
+        rate = _amount(entry["Expected return %"], f"Row {index+1} expected return")
+        vol = _amount(entry["Volatility %"], f"Row {index+1} volatility")
+        if units <= 0 or price <= 0 or (math.isfinite(cost) and cost < 0):
+            raise ValueError(f"Row {index+1}: units and current price must be positive; cost cannot be negative.")
+        if not -90 <= rate <= 100 or not 0 <= vol <= 150:
+            raise ValueError(f"Row {index+1}: expected return must be -90% to 100%, volatility 0% to 150%.")
+        value = units * price
+        if not math.isfinite(value) or value > 1e18:
+            raise ValueError(f"Row {index+1}: investment value is too large.")
+        basis = units * cost if math.isfinite(cost) else math.nan
+        rows.append({"Asset": name, "Class": kind, "Units": units,
+                     "Unit price": price, "Value": value, "Cost basis": basis,
+                     "Unrealized P/L": value-basis if math.isfinite(basis) else math.nan,
+                     "Expected return %": rate, "Volatility %": vol})
+    if not rows:
+        raise ValueError("Enter at least one investment.")
+    if len(rows) > 30:
+        raise ValueError("Use 30 or fewer holdings for a responsive dashboard.")
+    positions = pd.DataFrame(rows)
+    total = float(positions["Value"].sum())
+    w = (positions["Value"] / total).to_numpy()
+    sigma = positions["Volatility %"].to_numpy(dtype=float)
+    # covariance with a common pairwise correlation; no observed history.
+    signed_risk = w * sigma
+    variance = (1-correlation) * np.sum(signed_risk**2) + correlation * np.sum(signed_risk)**2
+    annual_vol = float(np.sqrt(max(0.0, variance)))
+    weighted_return = float(np.dot(w, positions["Expected return %"].to_numpy(dtype=float)))
+    positions["Weight %"] = 100.0*w
+    costed = positions["Cost basis"].notna()
+    summary = {
+        "total_value": total,
+        "unrealized_profit": float(positions.loc[costed, "Unrealized P/L"].sum()) if costed.any() else math.nan,
+        "cost_coverage": float(positions.loc[costed, "Value"].sum())/total,
+        "expected_return": weighted_return,
+        "modeled_volatility": annual_vol,
+        "largest_weight": float(w.max()),
+        "hhi": float(np.sum(w**2)),
+        "correlation_assumption": float(correlation),
+    }
+    return positions, summary
 
 
-def portfolio_summary(positions: pd.DataFrame, history: dict, annual_rf: float = 0.03) -> dict:
-    if positions.empty:
-        return {"total_value": 0.0, "market_coverage": 0.0, "cost_coverage": 0.0, "unrealized_profit": math.nan,
-                "largest_weight": 0.0, "hhi": 0.0, "sharpe": math.nan, "risk_coverage": 0.0}
-    total = float(positions["Value USD"].sum())
-    market_value = float(positions.loc[positions["Pricing"] == "Market", "Value USD"].sum())
-    priced_for_risk = set(history.get("tickers_used", []))
-    risk_value = float(positions.loc[positions["Asset"].isin(priced_for_risk), "Value USD"].sum())
-    costed = positions.loc[positions["Cost basis USD"].notna()]
-    costed_value = float(costed["Value USD"].sum())
-    profit = float(costed["Unrealized P/L USD"].sum()) if not costed.empty else math.nan
-    risk = history["metrics"]
-    vol = risk.get("volatility", 0.0)
-    # Arithmetic expected weekly return annualized, for same return series as vol.
-    sharpe = (float(history["weekly_returns"].mean())*52 - annual_rf) / vol if vol > 0 else math.nan
-    weights = (positions["Value USD"] / total).to_numpy() if total else np.array([])
-    return {"total_value": total, "market_coverage": market_value/total if total else 0.0,
-            "cost_coverage": costed_value/total if total else 0.0,
-            "unrealized_profit": profit,
-            "largest_weight": float(max(weights)) if weights.size else 0.0,
-            "hhi": float(np.sum(weights**2)) if weights.size else 0.0,
-            "risk_coverage": risk_value/total if total else 0.0,
-            "sharpe": float(sharpe)}
+def project_portfolio(starting_value: float, annual_return_pct: float,
+                      annual_volatility_pct: float, years: int,
+                      monthly_contribution: float = 0.0, scenarios: int = 1200,
+                      seed: int = 42) -> dict:
+    """Monthly end-of-month contributions with fixed-return path + lognormal bands.
+
+    Monthly iid factors are parameterized to reproduce the annual arithmetic
+    growth-factor mean and standard deviation implied by the two assumptions.
+    Correlations between distinct holdings are summarized at the portfolio level
+    by analyze_holdings; this function does not model rebalancing or asset paths.
+    """
+    vals = [starting_value, annual_return_pct, annual_volatility_pct, monthly_contribution]
+    if not all(math.isfinite(float(v)) for v in vals):
+        raise ValueError("Projection inputs must be finite.")
+    if starting_value <= 0 or monthly_contribution < 0 or not -90 <= annual_return_pct <= 100 or not 0 <= annual_volatility_pct <= 150:
+        raise ValueError("Invalid starting value, contribution, annual return, or volatility.")
+    if not 1 <= int(years) <= 50 or not 100 <= int(scenarios) <= 5000:
+        raise ValueError("Choose 1–50 years and 100–5,000 simulations.")
+    years = int(years)
+    scenarios = int(scenarios)
+    months = years*12
+    factor = 1 + float(annual_return_pct)/100
+    monthly_fixed = factor**(1/12)
+    deterministic = np.empty(months+1, dtype=float)
+    deterministic[0] = starting_value
+    for i in range(1, months+1):
+        deterministic[i] = deterministic[i-1]*monthly_fixed+monthly_contribution
+    ratio = float(annual_volatility_pct)/100 / factor
+    sigma_y = math.sqrt(math.log1p(ratio**2))
+    mu_y = math.log(factor)-sigma_y**2/2
+    mu_m = mu_y / 12
+    sigma_m = sigma_y / math.sqrt(12)
+    rng = np.random.default_rng(seed)
+    path = np.full(scenarios, float(starting_value))
+    lows = [starting_value]
+    mids = [starting_value]
+    highs = [starting_value]
+    worst_drawdown = np.zeros(scenarios)
+    peaks = path.copy()
+    for i in range(1, months+1):
+        shock = rng.standard_normal(scenarios) if sigma_m else np.zeros(scenarios)
+        path = path * np.exp(mu_m + sigma_m*shock) + monthly_contribution
+        peaks = np.maximum(peaks, path)
+        worst_drawdown = np.minimum(worst_drawdown, path/peaks-1)
+        if i % 12 == 0:
+            q = np.quantile(path, [0.1, 0.5, 0.9])
+            lows.append(float(q[0])); mids.append(float(q[1])); highs.append(float(q[2]))
+    # for consistent yearly deterministic output, sample after 12,24... months
+    fixed_ann = deterministic[::12]
+    total_added = starting_value+monthly_contribution*months
+    annual = pd.DataFrame({"Year": np.arange(years+1), "Base case": fixed_ann,
+                           "P10": lows, "Median": mids, "P90": highs})
+    return {
+        "annual": annual,
+        "base_ending": float(deterministic[-1]),
+        "base_growth": float(deterministic[-1]-total_added),
+        "paid_in": float(total_added),
+        "p10": lows[-1], "median": mids[-1], "p90": highs[-1],
+        "below_contributions": float(np.mean(path < total_added)),
+        "chance_negative_drawdown": float(np.mean(worst_drawdown < -0.20)),
+        "avg_worst_drawdown": float(np.mean(worst_drawdown)),
+        "simulated_final_values": path,
+        "years": years,
+    }
 
 
 def allocation_by_class(positions: pd.DataFrame) -> pd.DataFrame:
-    if positions.empty:
-        return pd.DataFrame(columns=["Class", "Value USD"])
-    return positions.groupby("Class", as_index=False)["Value USD"].sum().sort_values("Value USD", ascending=False)
-
-
-def portfolio_insights(positions: pd.DataFrame, summary: dict, history: dict) -> list[str]:
-    notes = []
-    if positions.empty:
-        return ["No priced holdings were available for analysis."]
-    largest = positions.loc[positions["Value USD"].idxmax()]
-    if summary["largest_weight"] >= .40:
-        notes.append(f"Concentration: {largest['Asset']} accounts for {summary['largest_weight']:.1%} of portfolio value.")
-    else:
-        notes.append(f"Largest position: {largest['Asset']} ({summary['largest_weight']:.1%} of value).")
-    if summary["risk_coverage"] < .80:
-        notes.append(f"Historical risk covers only {summary['risk_coverage']:.1%} of current portfolio value; missing history and manual assets are excluded.")
-    if summary["cost_coverage"] < .999:
-        notes.append("Some average purchase prices are missing, so portfolio-wide unrealized profit/loss is incomplete.")
-    if history["metrics"]:
-        notes.append(f"Historical maximum drawdown for the listed subset was {history['metrics']['max_drawdown']:.1%}. This is a past observation, not a future loss limit.")
-    else:
-        notes.append("Not enough overlapping historical prices to calculate meaningful risk statistics.")
-    if len(allocation_by_class(positions)) == 1:
-        notes.append("All holdings are in one asset class; diversify across types if appropriate to your investment goals.")
-    return notes
+    return positions.groupby("Class", as_index=False)["Value"].sum().sort_values("Value", ascending=False)

@@ -1,86 +1,78 @@
-"""Standalone PDF summary for the Investment Portfolio Analyzer."""
+"""Self-contained assumption-based investment portfolio PDF; no network data."""
 from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
 import math
-
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from xml.sax.saxutils import escape
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 
 
 def _font():
-    path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
-    if path.exists():
-        if 'PortfolioDejaVu' not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont('PortfolioDejaVu', str(path)))
-        return 'PortfolioDejaVu'
+    p = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+    if p.exists():
+        if 'ManualPortfolioFont' not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont('ManualPortfolioFont', str(p)))
+        return 'ManualPortfolioFont'
     return 'Helvetica'
 
 
-def make_portfolio_pdf(positions, summary, history, currency: str = 'USD', rate: float = 1.0) -> bytes:
+def make_portfolio_pdf(positions, summary, forecast, currency='USD', inflation=2.5):
     font = _font()
-    money_symbol = {'MNT':'₮','USD':'$','EUR':'€'}.get(currency, '$')
-    if font == 'Helvetica' and money_symbol == '₮':
-        money_symbol = 'MNT '
-    def amt(v):
-        return 'N/A' if v is None or not math.isfinite(float(v)) else f'{money_symbol}{float(v)*rate:,.0f}'
-    buff = BytesIO()
-    doc = SimpleDocTemplate(buff, pagesize=A4, topMargin=42, bottomMargin=36, leftMargin=42, rightMargin=42)
+    symbol = {'USD':'$', 'MNT':'₮', 'EUR':'€'}.get(currency,'$')
+    if font == 'Helvetica' and symbol == '₮':
+        symbol = 'MNT '
+    def money(v):
+        return 'N/A' if v is None or not math.isfinite(float(v)) else f'{symbol}{float(v):,.0f}'
+    buffer = BytesIO()
+    document = SimpleDocTemplate(buffer, pagesize=A4, topMargin=43, bottomMargin=40,
+                                 leftMargin=42, rightMargin=42)
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='PortHead', fontName=font, fontSize=19, leading=25,
-                              textColor=colors.HexColor('#12334c'), spaceAfter=8))
-    styles.add(ParagraphStyle(name='PortSub', fontName=font, fontSize=11, leading=16,
-                              textColor=colors.HexColor('#177d87'), spaceBefore=14, spaceAfter=8))
-    styles.add(ParagraphStyle(name='PortText', fontName=font, fontSize=8.3, leading=13,
-                              textColor=colors.HexColor('#304c60'), spaceAfter=6))
-    styles.add(ParagraphStyle(name='PortTiny', fontName=font, fontSize=7.3, leading=11,
-                              textColor=colors.HexColor('#304c60')))
-    story = [Paragraph('INVESTMENT PORTFOLIO | FINANCIAL FUTURE PLANNER v5', styles['PortHead']),
-             Paragraph('A multi-asset valuation and historical risk snapshot. Illustrative educational analysis only.', styles['PortText'])]
-    metrics = history.get('metrics', {})
-    values = [
-        ('Total portfolio value', amt(summary['total_value'])),
-        ('Unrealized P/L (known costs)', amt(summary['unrealized_profit'])),
-        ('Largest holding weight', f"{summary['largest_weight']:.1%}"),
-        ('Live-price valuation coverage', f"{summary['market_coverage']:.1%}"),
-        ('Historical annualized return*', f"{metrics['annualized_return']:.1%}" if metrics else 'N/A'),
-        ('Annualized historical volatility*', f"{metrics['volatility']:.1%}" if metrics else 'N/A'),
-        ('Maximum drawdown*', f"{metrics['max_drawdown']:.1%}" if metrics else 'N/A'),
-        ('Weekly historical 95% VaR*', f"{metrics['var95_week']:.1%}" if metrics else 'N/A'),
+    styles.add(ParagraphStyle(name='ManualHead', fontName=font, fontSize=19, leading=26,
+                              textColor=colors.HexColor('#12354d'), spaceAfter=9))
+    styles.add(ParagraphStyle(name='ManualSub', fontName=font, fontSize=11, leading=16,
+                              textColor=colors.HexColor('#087f86'), spaceBefore=14, spaceAfter=9))
+    styles.add(ParagraphStyle(name='ManualBody', fontName=font, fontSize=8.5, leading=14,
+                              textColor=colors.HexColor('#315162'), spaceAfter=8))
+    styles.add(ParagraphStyle(name='ManualSmall', fontName=font, fontSize=8, leading=12,
+                              textColor=colors.HexColor('#315162')))
+    p = lambda s: Paragraph(escape(str(s)), styles['ManualSmall'])
+    story = [Paragraph('FINANCIAL FUTURE PLANNER | INVESTMENTS', styles['ManualHead']),
+             Paragraph('Offline portfolio projection. All prices, expected returns and volatility assumptions were supplied by the user; no market data was downloaded.', styles['ManualBody'])]
+    rows = [
+        ('Portfolio value today', money(summary['total_value'])),
+        ('Expected annual return (assumed)', f"{summary['expected_return']:.1f}%"),
+        ('Modeled portfolio volatility', f"{summary['modeled_volatility']:.1f}%"),
+        ('Unrealized P/L (known costs only)', money(summary['unrealized_profit'])),
+        ('Base ending value', money(forecast['base_ending'])),
+        ('Base investment growth', money(forecast['base_growth'])),
+        ('Simulated 10th-percentile end', money(forecast['p10'])),
+        ('Simulated 90th-percentile end', money(forecast['p90'])),
+        ('Probability below total contributions (modeled)', f"{forecast['below_contributions']:.1%}"),
     ]
-    story.append(Paragraph('Portfolio summary', styles['PortSub']))
-    summary_table = Table([[Paragraph(k, styles['PortTiny']), Paragraph(v, styles['PortTiny'])] for k,v in values],
-                          colWidths=[275, 215], hAlign='LEFT')
-    summary_table.setStyle(TableStyle([
-        ('ROWBACKGROUNDS',(0,0),(-1,-1),[colors.HexColor('#f2f7f9'),colors.white]),
-        ('BOTTOMPADDING',(0,0),(-1,-1),8), ('TOPPADDING',(0,0),(-1,-1),8),
-        ('LINEBELOW',(0,-1),(-1,-1),0.6,colors.HexColor('#d8e4ec')),
-    ]))
-    story.append(summary_table)
-    story.append(Paragraph('Current holdings', styles['PortSub']))
-    rows = [[Paragraph(s,styles['PortTiny']) for s in ('Investment','Asset class','Market value','Weight')]]
-    for _,p in positions.sort_values('Value USD', ascending=False).iterrows():
-        rows.append([Paragraph(str(p['Asset'])[:32],styles['PortTiny']),
-                     Paragraph(str(p['Class'])[:24],styles['PortTiny']),
-                     Paragraph(amt(p['Value USD']),styles['PortTiny']),
-                     Paragraph(f"{p['Weight %']:.1f}%",styles['PortTiny'])])
-    table = Table(rows,colWidths=[150,130,135,75],repeatRows=1,hAlign='LEFT')
-    table.setStyle(TableStyle([
-        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#dcecef')),
-        ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f4f8fa')]),
-        ('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),6),
-        ('BOTTOMPADDING',(0,0),(-1,-1),7),('TOPPADDING',(0,0),(-1,-1),7),
-    ]))
-    story.append(table)
-    story.extend([Spacer(1,12),Paragraph('Interpretation and limitations',styles['PortSub']),
-        Paragraph('*Historical return, volatility, drawdown and VaR reflect only listed holdings with overlapping data, assuming current quantities were held over the historical period. Manual assets have no invented return histories.', styles['PortText']),
-        Paragraph('Market prices are third-party observations and may be delayed or missing. Average purchase price is optional; unrealized P/L excludes positions without cost information and does not include trading fees, realized gains or taxes.',styles['PortText']),
-        Paragraph('Live tickers and manually entered USD-equivalent prices are combined into one valuation. Currency conversion (if selected) uses a market estimate; historical FX risk is not modeled. Not financial advice.',styles['PortText'])])
-    doc.build(story)
-    return buff.getvalue()
+    story.append(Paragraph('Portfolio and projection summary', styles['ManualSub']))
+    tab=Table([[p(k),p(v)] for k,v in rows],colWidths=[300,190], hAlign='LEFT')
+    tab.setStyle(TableStyle([('ROWBACKGROUNDS',(0,0),(-1,-1),[colors.HexColor('#f2f8f9'),colors.white]),
+                             ('BOTTOMPADDING',(0,0),(-1,-1),7),('TOPPADDING',(0,0),(-1,-1),7)]))
+    story.append(tab)
+    story.append(Paragraph('Current holdings', styles['ManualSub']))
+    hold=[[p(x) for x in ('Investment','Class','Value','Weight')]]
+    for _,row in positions.sort_values('Value', ascending=False).iterrows():
+        hold.append([p(str(row['Asset'])[:30]),p(str(row['Class'])[:24]),
+                     p(money(row['Value'])),p(f"{row['Weight %']:.1f}%")])
+    t=Table(hold,colWidths=[135,155,125,75],repeatRows=1,hAlign='LEFT')
+    t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#dcebee')),
+                           ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f3f8fa')]),
+                           ('VALIGN',(0,0),(-1,-1),'TOP'),
+                           ('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]))
+    story.append(t)
+    story.append(Paragraph('Method & limitations',styles['ManualSub']))
+    story.append(Paragraph('The constant-return base case compounds monthly and adds the specified contribution at the end of each month. Simulation bands use illustrative lognormal returns from the user-supplied expected annual return and modeled portfolio volatility. The latter uses a common cross-asset correlation assumption, not observed covariance.',styles['ManualBody']))
+    story.append(Paragraph(f'Inflation is assumed constant at {inflation:.1f}% per year. No fees, taxes, cash dividends, transactions, exchange-rate movements or market-price updates are modeled. Simulated scenarios are not predictive probabilities and are not investment advice.',styles['ManualBody']))
+    document.build(story)
+    return buffer.getvalue()
