@@ -1,4 +1,4 @@
-"""Financial Future Planner — a two-tab Streamlit class / portfolio project.
+"""Financial Future Planner — three-tab Streamlit class / portfolio project.
 
 Run: python -m streamlit run app.py
 """
@@ -36,6 +36,7 @@ from finance import (
     model_supported_monthly_spending,
 )
 from report import generate_pdf_report
+from portfolio_ui import render_investment_tab
 
 
 st.set_page_config(
@@ -220,21 +221,21 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
 
 st.markdown(
     """<section class="planner-hero">
-      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER &nbsp; / &nbsp; VISUAL EDITION v4.2</p>
+      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER &nbsp; / &nbsp; MULTI-ASSET EDITION v5.0</p>
       <h1>Make confident financial decisions.</h1>
       <p>Clear numbers, richer charts, and a better view of the road ahead.</p>
-      <div class="chip-row"><span class="chip">🏠 Loan insights</span><span class="chip">🌱 Retirement planning</span><span class="chip">📉 Risk scenarios</span><span class="chip">📄 PDF reporting</span></div>
+      <div class="chip-row"><span class="chip">🏠 Loan insights</span><span class="chip">🌱 Retirement planning</span><span class="chip">📊 Multi-asset investing</span><span class="chip">📉 Risk scenarios</span><span class="chip">📄 PDF reporting</span></div>
     </section>""",
     unsafe_allow_html=True,
 )
 st.caption(
-    "Two planners | 4 loan inputs + 5 retirement inputs | automatic scenarios | PDF report. "
-    "Currency selection changes labels, not exchange rates."
+    "Three planners | 4 loan inputs + 5 retirement inputs | multi-asset analysis | PDF reports. "
+    "Loan/retirement currencies change labels only; investments use quoted USD prices and FX when available."
 )
 st.sidebar.caption("Figures are estimates, not personalized financial advice.")
-st.sidebar.caption("No bank account, sign-in, API key, or external data connection is required.")
+st.sidebar.caption("Loans and retirement work offline; investment live quotes require Yahoo Finance access. No sign-in or API key is needed.")
 
-loan_tab, retirement_tab = st.tabs(["🏠 Mortgage / Loan Planner", "🌱 Retirement Planner"])
+loan_tab, retirement_tab, investment_tab = st.tabs(["🏠 Mortgage / Loan Planner", "🌱 Retirement Planner", "📊 Investments"])
 
 # ────────────────────────── LOAN TAB ──────────────────────────
 with loan_tab:
@@ -1159,6 +1160,11 @@ with loan_tab:
         )
 
 # ─────────────────── DOWNLOADABLE COMBINED PDF ───────────────────
+# ────────────────── MULTI-ASSET INVESTMENT TAB ──────────────────
+with investment_tab:
+    render_investment_tab(currency_choice)
+
+# Existing loan + retirement combined PDF stays unchanged.
 report_data = generate_pdf_report(
     code=currency_choice.split(" ")[0],
     loan={
@@ -1208,7 +1214,7 @@ with st.sidebar:
         mime="application/pdf",
         use_container_width=True,
     )
-    st.caption("Includes both tabs, loan and retirement what-if scenarios, milestones, stress tests and insights.")
+    st.caption("Includes loan + retirement analyses. Download the separate multi-asset portfolio PDF inside Investments.")
     st.divider()
     st.caption("**Teacher demo:** open the project's TEACHER_GUIDE.md in Cursor for a short walkthrough and formulas.")
 
@@ -1223,4 +1229,4 @@ with retirement_tab:
 
 
 st.divider()
-st.caption("Financial Future Planner · v4.1 Visual Edition · Educational estimates, not personalized financial advice")
+st.caption("Financial Future Planner · v5 Multi-Asset Edition · Educational estimates; not financial advice")
