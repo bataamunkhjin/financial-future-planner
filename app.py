@@ -1,4 +1,4 @@
-"""Financial Future Planner — three-tab Streamlit class / portfolio project.
+"""Financial Future Planner — two-tab, offline mortgage and retirement tool.
 
 Run: python -m streamlit run app.py
 """
@@ -33,12 +33,8 @@ from finance import (
     mortgage_investing_return_scenarios,
     retirement_life_schedule,
     inflation_purchasing_power,
-    model_supported_monthly_spending,
 )
 from report import generate_pdf_report
-from portfolio_ui import render_investment_tab
-from savings_comparison import compare_bank_and_investment
-from risk_comparison import compare_savings_investing_risks
 
 
 st.set_page_config(
@@ -51,7 +47,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* v4.3 visual refresh: spacious full-width charts and simpler chart navigation. */
+    /* Clean two-tab layout with spacious charts. */
     :root {--ink:#142c41;--ocean:#047e8d;--mint:#16b59b;--edge:#dce8ed;}
     html,body,[data-testid="stAppViewContainer"] {font-family: Inter, "Segoe UI", Arial, sans-serif;}
     .block-container {max-width: 1380px; padding-top: 1.1rem; padding-bottom: 3rem;}
@@ -85,25 +81,13 @@ st.markdown(
     .planner-hero::after {content:"";position:absolute;width:310px;height:310px;right:-125px;top:-165px;border:54px solid rgba(173,255,227,.075);border-radius:50%;pointer-events:none;}
     .planner-hero h1 {color: #fff; margin: 0; font-size: 2.0rem; line-height: 1.25;}
     .planner-hero p {color: #dcefeb; margin: 8px 0 0; font-size: .99rem;}
-    .asset-hero {background:linear-gradient(114deg,#12344b,#087c82);color:white;padding:25px 29px;border-radius:20px;margin:8px 0 14px;box-shadow:0 10px 28px rgba(20,61,80,.11);}
-    .asset-hero h2 {font-size:1.65rem;color:white;margin:4px 0 8px;}
-    .asset-hero p {margin:0;color:#d8f2f0;font-size:.96rem;}
-    .asset-eyebrow {font-size:.7rem;font-weight:800;letter-spacing:.12em;color:#9ee9dd;}
-    .linked-ribbon {padding:17px 20px;border:1px solid #c8e4e5;border-left:5px solid #078e93;border-radius:13px;background:#eff9f9;display:flex;flex-direction:column;gap:5px;margin:20px 0;color:#173d4f;}
-    .linked-ribbon span {color:#597987;font-size:.89rem;line-height:1.5;}
+    .planner-hero .hero-eyebrow {color: #99efe0; font-size: .89rem; letter-spacing: .05em; font-weight: 750; margin: 0 0 8px;}
+    .hero-header {display:flex;justify-content:space-between;align-items:center;gap:22px;position:relative;z-index:1;}
+    .hero-copy {min-width:0;flex:1;}
+    .university-logo-wrap {background:#ffffff;padding:12px 15px;border-radius:14px;flex-shrink:0;box-shadow:0 5px 16px rgba(0,0,0,.10);}
+    .university-logo {width:min(290px,100%);height:auto;display:block;}
+    .hero-subtext {max-width:580px;}
 
-    /* Simple bank-versus-investing cards; balanced on desktop, stacked on mobile. */
-    .risk-panel {background:#fff;border:1px solid #d8e7eb;border-radius:17px;
-        padding:17px 20px; min-height:365px;box-shadow:0 5px 20px rgba(20,61,80,.045);}
-    .risk-panel.bank {border-top:4px solid #426d9b;}
-    .risk-panel.invest {border-top:4px solid #049b8b;}
-    .risk-panel .risk-heading{font-size:1.02rem;color:#123347;font-weight:800;margin-bottom:6px;}
-    .risk-panel .risk-sub{font-size:.84rem;line-height:1.55;color:#526a79;margin-bottom:10px;}
-    .risk-panel .risk-number{font-size:1.48rem;color:#183d50;font-weight:800;letter-spacing:-.025em;}
-    .risk-panel .risk-caption{font-size:.79rem;color:#5c7585;margin-bottom:10px;}
-    .risk-panel .risk-point{font-size:.85rem;line-height:1.55;color:#365466;margin:8px 0;}
-    .risk-panel .risk-point b {color:#1b455a;}
-    .planner-hero .hero-eyebrow {color: #8ee2cc; font-size: .76rem; letter-spacing: .12em; font-weight: 800; margin: 0 0 6px;}
     [data-testid="stMetric"] {
         background: #fff; padding: 16px; border-radius: 16px;
         border: 1px solid #dce9eb; min-height: 116px;
@@ -122,8 +106,9 @@ st.markdown(
         .planner-hero {padding: 23px;}
         .chip-row {gap:5px;}
         .planner-hero h1 {font-size: 1.5rem;}
+        .hero-header {flex-direction:column-reverse;align-items:flex-start;gap:15px;}
+        .university-logo {width:220px;}
         [data-testid="stMetricValue"] {font-size: 1.22rem;}
-        .risk-panel {min-height:0;}
     }
     </style>
     """,
@@ -240,23 +225,221 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
     return fig
 
 
-st.markdown(
-    """<section class="planner-hero">
-      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER &nbsp; / &nbsp; LINKED PLANNING EDITION v5.1</p>
-      <h1>Make confident financial decisions.</h1>
-      <p>Clear numbers, richer charts, and a better view of the road ahead.</p>
-      <div class="chip-row"><span class="chip">🏠 Loan insights</span><span class="chip">🌱 Retirement planning</span><span class="chip">📊 Multi-asset investing</span><span class="chip">📉 Risk scenarios</span><span class="chip">📄 PDF reporting</span></div>
-    </section>""",
-    unsafe_allow_html=True,
+# The user-provided American University of Mongolia logo is embedded locally so
+# uploading only app.py to GitHub still renders the exact image without a URL.
+AUM_LOGO_BASE64 = (
+    "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"
 )
-st.caption(
-    "Three planners | 4 loan inputs + 5 retirement inputs | multi-asset analysis | PDF reports. "
-    "Loan/retirement currencies change labels only; investments use quoted USD prices and FX when available."
+logo_markup = (
+    '<div class="university-logo-wrap"><img class="university-logo" '
+    f'src="data:image/png;base64,{AUM_LOGO_BASE64}" '
+    'alt="American University of Mongolia logo"></div>'
 )
-st.sidebar.caption("Figures are estimates, not personalized financial advice.")
-st.sidebar.caption("All three planners work offline. Investment prices and return assumptions are entered by you; no sign-in or API key is needed.")
 
-loan_tab, retirement_tab, investment_tab = st.tabs(["🏠 Mortgage / Loan Planner", "🌱 Retirement Planner", "📊 Investments"])
+hero_html = """<section class="planner-hero">
+  <div class="hero-header">
+    <div class="hero-copy">
+      <p class="hero-eyebrow">Munkhjin Bataa</p>
+      <h1>Financial Future Planner</h1>
+      <p class="hero-subtext">Understand borrowing costs. Plan your retirement with clarity.</p>
+      <div class="chip-row">
+        <span class="chip">🏠 Mortgage &amp; Loan</span>
+        <span class="chip">🌱 Retirement Planning</span>
+        <span class="chip">📄 PDF Reports</span>
+      </div>
+    </div>
+    __SCHOOL_LOGO__
+  </div>
+</section>"""
+st.markdown(hero_html.replace("__SCHOOL_LOGO__", logo_markup), unsafe_allow_html=True)
+st.caption("Two planners | 4 loan inputs + 5 retirement inputs | No external market data or account needed.")
+st.sidebar.caption("Figures are educational estimates, not personalized financial advice.")
+st.sidebar.caption("All calculations work offline. Currency selection changes labels, not exchange rates.")
+
+loan_tab, retirement_tab = st.tabs(["🏠 Mortgage / Loan Planner", "🌱 Retirement Planner"])
 
 # ────────────────────────── LOAN TAB ──────────────────────────
 with loan_tab:
@@ -511,24 +694,6 @@ with loan_tab:
     milestones_display["Balance Remaining"] = milestones_display["Balance Remaining"].map(money)
     st.dataframe(milestones_display, hide_index=True, use_container_width=True)
     st.caption("Milestones refer to the percentage of original loan PRINCIPAL repaid, not total cash spent.")
-    with st.expander("Understand the mortgage calculations · for your class presentation"):
-        st.markdown(r"""
-**1. Monthly fixed loan payment**
-
-$$M=P\frac{r(1+r)^n}{(1+r)^n-1}$$
-
-- $P$ = starting principal; $r$ = annual nominal interest rate divided by 12; $n$ = months.
-- When the interest rate is zero, monthly payment is simply $P/n$.
-- Monthly interest = remaining principal × monthly rate.
-- Principal repaid = actual payment − monthly interest. Extra payments go to principal.
-- The actual last payment is capped at the remaining balance plus interest.
-
-**2. Break-even investment return**
-
-The mortgage's effective annual borrowing rate is $((1+r)^{12}-1)\times100\%$.
-This is the mathematical break-even fixed return **before** investment taxes, fees, risk or liquidity differences.
-""")
-
     st.markdown("#### Monthly amortization schedule")
     display_schedule = chosen.copy()
     display_schedule["Payment Date"] = display_schedule["Payment Date"].astype(str)
@@ -632,6 +797,7 @@ with retirement_tab:
         expected_return, inflation, volatility, portfolio_target,
         simulations=int(simulations), seed=42,
     )
+    fan = simulation["fan"]  # Retained for the Monte Carlo percentile CSV export.
     savings_goal_80 = simulated_lifetime_savings_goal(
         int(current_age), int(retirement_age), int(planning_age),
         retirement_savings, retirement_contribution, target_income,
@@ -645,12 +811,6 @@ with retirement_tab:
     )
     inflation_table = inflation_purchasing_power(
         projection, int(current_age), target_income, inflation,
-    )
-    safe_spending = model_supported_monthly_spending(
-        int(current_age), int(retirement_age), int(planning_age),
-        retirement_savings, retirement_contribution, target_income,
-        expected_return, inflation, volatility,
-        simulations=int(simulations), seed=42,
     )
     monthly_income_to_horizon = supported_income
     monthly_saving_to_horizon = needed_per_month
@@ -745,80 +905,6 @@ with retirement_tab:
             "The 80% goal is an illustrative planning threshold, not a recommended risk tolerance. "
             "Success depends on the assumed market return distribution, constant inflation, and selected planning age."
         )
-
-    st.markdown("#### Model-supported monthly spending")
-    st.caption(
-        "How much monthly spending would be funded in at least 80%, 90%, or 95% of the "
-        "simulated market paths? These are scenario thresholds, not guaranteed safe withdrawals."
-    )
-    spending_levels = safe_spending["options"]
-    s80, s90, s95 = st.columns(3)
-    for col, (_, option) in zip((s80, s90, s95), spending_levels.iterrows()):
-        col.metric(
-            f"At least {option['Success Target']:.0%} modeled success",
-            money(option["Monthly Spending"]),
-        )
-    fig_spend = go.Figure()
-    fig_spend.add_trace(go.Bar(
-        x=[f"{p:.0%}" for p in spending_levels["Success Target"]],
-        y=spending_levels["Monthly Spending"],
-        marker_color=["#159579", "#2483a5", "#405f8b"],
-        name="Simulated spending capacity",
-        hovertemplate="%{x} success target: %{y:,.0f}<extra></extra>",
-    ))
-    fig_spend.add_hline(
-        y=target_income, line_dash="dot", line_color="#db773a",
-        annotation_text="Your target", annotation_position="top right",
-    )
-    fig_spend.update_xaxes(title="Required share of simulated paths")
-    st.plotly_chart(
-        plot_layout(fig_spend, height=310, y_label=f"Monthly spending ({CURRENCY}, today's money)"),
-        use_container_width=True,
-    )
-    st.caption(
-        f"Your entered {money(target_income)}/month is funded in "
-        f"{safe_spending['current_spending_success']:.1%} of these same simulated paths. "
-        "More conservative percentages generally imply a lower monthly spending limit. "
-        "The simulation assumes fixed inflation and independent annual market returns."
-    )
-
-    st.markdown("#### Retirement trajectory and uncertainty")
-    fan = simulation["fan"]
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=fan["Age"], y=fan["P90"], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(
-        x=fan["Age"], y=fan["P10"], mode="lines", line=dict(width=0),
-        fill="tonexty", fillcolor="rgba(99,102,241,.13)", name="10th–90th percentile", hoverinfo="skip",
-    ))
-    fig.add_trace(go.Scatter(x=fan["Age"], y=fan["P75"], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(
-        x=fan["Age"], y=fan["P25"], mode="lines", line=dict(width=0),
-        fill="tonexty", fillcolor="rgba(99,102,241,.23)", name="25th–75th percentile", hoverinfo="skip",
-    ))
-    fig.add_trace(go.Scatter(
-        x=fan["Age"], y=fan["Median"], mode="lines", name="Simulation median", line=dict(color="#6366f1", width=3),
-    ))
-    fig.add_trace(go.Scatter(
-        x=projection["Age"], y=projection["Balance (today's money)"],
-        mode="lines", name="Constant-return projection", line=dict(color="#10b981", dash="dash", width=2),
-    ))
-    fig.add_vline(x=retirement_age, line_dash="dot", line_color="#f59e0b")
-    fig.add_annotation(x=retirement_age, y=1, yref="paper", text="Retirement", showarrow=False, yshift=15)
-    fig.update_xaxes(title="Age")
-    st.plotly_chart(plot_layout(fig, height=445, y_label=f"Portfolio in today's {CURRENCY}"), use_container_width=True)
-    st.caption(
-        f"Fan chart: {int(simulations):,} simulated return paths, with independent annual returns. "
-        "Shaded bands show percentiles, not guaranteed outcomes. Dashed line assumes a constant annual return. "
-        "After retirement, the target income is withdrawn monthly in today's money."
-    )
-
-    p1, p2, p3 = st.columns(3)
-    p1.metric("Required monthly saving · fixed return", money(needed_per_month))
-    p2.metric(f"Simulations funding withdrawals through age {planning_age}", f"{100 * simulation['sustain_probability']:.1f}%")
-    p3.metric(
-        "Constant-return income depletion",
-        f"Around age {depletion_age:.1f}" if depletion_age is not None else f"Not through age {planning_age}",
-    )
 
     st.markdown("#### Retirement Life Simulator")
     st.caption(
@@ -996,11 +1082,6 @@ with retirement_tab:
         f"(an additional {money(savings_goal_80['monthly_increase_needed'])} compared with the current plan)."
     )
     retirement_insights.append(
-        f"Across {int(simulations):,} sampled market paths, modeled spending limits for 80%, 90% "
-        f"and 95% success are {', '.join(money(v) for v in safe_spending['options']['Monthly Spending'])} "
-        "per month in today's purchasing power. These values are not guaranteed safe withdrawals."
-    )
-    retirement_insights.append(
         "The model holds spending and saving constant in today's purchasing power, and ignores "
         "taxes, fees, pensions, flexible spending, and variable inflation."
     )
@@ -1011,45 +1092,6 @@ with retirement_tab:
             st.success(line)
         else:
             st.info(line)
-
-    with st.expander("Understand the retirement calculations · for your class presentation"):
-        st.markdown(r"""
-**1. Inflation-adjusted return**
-
-$$r_{real,monthly}=\left(\frac{1+r_{nominal}}{1+i}\right)^{1/12}-1$$
-
-Balances, contributions, and spending are expressed in **today's purchasing power**.
-
-**2. Retirement portfolio needed to fund spending**
-
-$$\text{Capital needed}=\sum_{m=1}^{N}\frac{\text{monthly spending}}{(1+r_{real,monthly})^m}$$
-
-Here $N$ is the number of retirement months up to the chosen planning age. This assumes a constant return.
-
-**3. Monthly retirement drawdown**
-
-Every month, the portfolio **earns the modeled return**, then pays that month's withdrawal. Savings contributions stop at retirement. The program tracks whether any withdrawal cannot be paid in full.
-
-**4. Monte Carlo simulation**
-
-For each path, annual returns vary; monthly contributions continue only until retirement, and withdrawals are paid afterward. The success rate is the share of paths in which **every withdrawal** can be paid up to the chosen age.
-
-**5. Savings goal for 80% simulated spending success**
-
-The app calculates, for each return path, the retirement capital needed to pay every withdrawal and the monthly contribution required to build it. The 80th percentile of these path-by-path contributions is the approximately 80% success savings target. The simulated probability is not a guarantee.
-
-**6. Retirement Life Simulator**
-
-Each month after retirement: `closing balance = max(0, opening balance * (1 + real monthly return) - actual withdrawal)`. The app records investment growth, withdrawals actually funded, and any spending shortfall. Contributions are zero in retirement.
-
-**7. Model-supported spending (80%, 90%, 95%)**
-
-For each Monte Carlo path, the app computes the maximum constant-real monthly withdrawal the projected retirement savings could support through the planning age. The displayed threshold is a conservative empirical percentile. These are **model scenarios, not guaranteed safe withdrawal rates**.
-
-**8. Purchasing power**
-
-`Nominal future amount = amount in today's purchasing power * (1 + inflation) ^ years`. Both views describe the same real plan, not two different investment results.
-""")
 
     st.markdown("#### Year-by-year balance projection")
     st.dataframe(
@@ -1180,259 +1222,8 @@ with loan_tab:
             file_name="mortgage_vs_investing.csv", mime="text/csv",
         )
 
-# ─────────────────── DOWNLOADABLE COMBINED PDF ───────────────────
-# ────────────────── MULTI-ASSET INVESTMENT TAB ──────────────────
-with investment_tab:
-    render_investment_tab(currency_choice)
+# ─────────────────── DOWNLOADABLE TWO-PLANNER PDF ───────────────────
 
-# ───────────── OPTIONAL BANK SAVINGS VS INVESTING COMPARISON ─────────────
-# Placed AFTER the Investments tab is analyzed so its stored valuation is
-# available immediately, even during the first completed portfolio analysis.
-# It adds a section INSIDE Retirement; it does not create or remove any tabs.
-with retirement_tab:
-    st.markdown("#### Bank savings vs investing")
-    st.markdown(
-        '<div class="linked-ribbon"><b>Two ways to build your retirement savings</b>'
-        '<span>Compare a bank deposit and an investment strategy using the same starting '
-        'money, monthly savings, retirement date and monthly lifestyle budget. '
-        'Only the assumed return differs.</span></div>',
-        unsafe_allow_html=True,
-    )
-    linked_result = st.session_state.get("portfolio_result")
-    linked_value = None
-    linked_return = None
-    linked_volatility = None
-    # Manual investment values already use the selected currency; no exchange
-    # rates are fetched or silently inferred. A currency change invalidates
-    # the old linked valuation until the user analyzes again.
-    if isinstance(linked_result, dict) and linked_result.get("currency_code") == currency_choice.split(" ")[0]:
-        linked_summary = linked_result.get("summary") or {}
-        if float(linked_summary.get("total_value", 0.0)) > 0:
-            linked_value = float(linked_summary["total_value"])
-        rate = float(linked_summary.get("expected_return", float("nan")))
-        if -30 <= rate <= 30:
-            linked_return = rate
-        vol = float(linked_summary.get("modeled_volatility", float("nan")))
-        if 0 <= vol <= 60:
-            linked_volatility = vol
-
-    with st.expander("Optional comparison assumptions", expanded=False):
-        st.caption("These settings affect only this comparison, not your existing retirement projections.")
-        bank_rate = st.number_input(
-            "Bank annual interest assumption (%)", min_value=0.0, max_value=40.0,
-            value=9.0 if IS_MNT else (3.0 if currency_choice.startswith("EUR") else 4.0),
-            step=0.5, format="%.1f", key=f"bank_interest_{currency_choice[:3]}",
-            help="Illustrative nominal deposit interest rate, not a live bank offer. Rates, taxes and bank terms can change.",
-        )
-        savings_sources = ["Your retirement savings input"]
-        if linked_value is not None:
-            savings_sources.extend([
-                "Your analyzed investment portfolio instead",
-                "Both balances (only if they are separate funds)",
-            ])
-        savings_source = st.selectbox("Starting money for this comparison", savings_sources,
-                                      help="Use the portfolio entered in the same selected currency. Avoid counting the same investments twice.")
-        return_sources = ["Your retirement expected-return assumption"]
-        if linked_return is not None:
-            return_sources.append("Your portfolio assumed return (illustrative)")
-        return_source = st.selectbox("Investing return for this comparison", return_sources,
-                                     help="The portfolio return is a weighted user assumption, NOT a measured return or prediction.")
-        risk_vol_sources = ["Retirement volatility assumption"]
-        if linked_volatility is not None:
-            risk_vol_sources.append("Your portfolio modeled volatility (illustrative)")
-        risk_vol_source = st.selectbox(
-            "Volatility used for risk scenarios", risk_vol_sources,
-            help="The portfolio volatility is calculated from your entered risk estimates and a simplifying correlation assumption; neither setting predicts future losses.",
-        )
-
-    compare_initial = float(retirement_savings)
-    if savings_source.startswith("Your analyzed") and linked_value is not None:
-        compare_initial = float(linked_value)
-    elif savings_source.startswith("Both") and linked_value is not None:
-        compare_initial += float(linked_value)
-    compare_investing_rate = float(linked_return if return_source.startswith("Your portfolio") and linked_return is not None else expected_return)
-    comparison_result = compare_bank_and_investment(
-        current_age=int(current_age), retirement_age=int(retirement_age),
-        planning_age=int(planning_age), starting_balance=compare_initial,
-        monthly_saving=float(retirement_contribution), monthly_spending=float(target_income),
-        bank_rate_pct=float(bank_rate), investing_rate_pct=compare_investing_rate,
-        inflation_pct=float(inflation),
-    )
-    comparison_volatility = (
-        linked_volatility if risk_vol_source.startswith("Your portfolio")
-        and linked_volatility is not None else float(volatility)
-    )
-    comparison_risk = compare_savings_investing_risks(
-        comparison_result, annual_volatility_pct=float(comparison_volatility),
-        scenarios=int(simulations), seed=42,
-    )
-    b1, b2, b3 = st.columns(3)
-    b1.metric("Bank at retirement", money(comparison_result["retirement_balances"]["Bank"]))
-    b2.metric("Investing at retirement", money(comparison_result["retirement_balances"]["Investing"]))
-    b3.metric("Investing − bank", money(comparison_result["retirement_balances"]["Investing"]-comparison_result["retirement_balances"]["Bank"]))
-    b4, b5 = st.columns(2)
-    bank_age = comparison_result["first_shortfall_ages"]["Bank"]
-    invest_age = comparison_result["first_shortfall_ages"]["Investing"]
-    b4.metric("Bank funds monthly lifestyle", f"Through age {planning_age}" if bank_age is None else f"Until ~age {bank_age:.1f}")
-    b5.metric("Investments fund monthly lifestyle", f"Through age {planning_age}" if invest_age is None else f"Until ~age {invest_age:.1f}")
-
-    st.markdown("##### Risks you should compare")
-    real_bank_yield = comparison_risk["bank_real_return_pct"]
-    real_yield_note = (
-        "Below inflation — purchasing power erodes"
-        if comparison_risk["bank_loses_purchasing_power"]
-        else "At or above assumed inflation (before taxes and fees)"
-    )
-    risk_bank, risk_invest = st.columns(2, gap="large")
-    with risk_bank:
-        st.markdown(f"""
-        <div class="risk-panel bank">
-          <div class="risk-heading">🏦 Bank savings <span style="font-weight:500;color:#627788">· rate-sensitive</span></div>
-          <div class="risk-sub">Predictable nominal interest only while the offered rate and terms hold.</div>
-          <div class="risk-number">{real_bank_yield:+.2f}%</div>
-          <div class="risk-caption">Assumed annual return after inflation</div>
-          <div class="risk-point"><b>Purchasing-power risk:</b> {real_yield_note}.</div>
-          <div class="risk-point"><b>Lower-rate scenario:</b> {comparison_risk['bank_lower_rate_pct']:.1f}% instead of {bank_rate:.1f}% annually; projected retirement savings fall by <b>{money(comparison_risk['bank_interest_stress_difference'])}</b>.</div>
-          <div class="risk-point"><b>Other risks:</b> bank failure/insurance limits, early withdrawal restrictions, inflation, taxes, and currency risk.</div>
-        </div>""", unsafe_allow_html=True)
-    with risk_invest:
-        st.markdown(f"""
-        <div class="risk-panel invest">
-          <div class="risk-heading">📈 Investing <span style="font-weight:500;color:#627788">· market-sensitive</span></div>
-          <div class="risk-sub">Higher potential growth, but balances can decline and returns vary each year.</div>
-          <div class="risk-number">{comparison_risk['invest_one_year_loss_probability']:.1%}</div>
-          <div class="risk-caption">Modeled chance of a negative one-year nominal return</div>
-          <div class="risk-point"><b>Lower-tail outcome:</b> 10th-percentile savings at retirement are <b>{money(comparison_risk['invest_p10_at_retirement'])}</b> in today's money.</div>
-          <div class="risk-point"><b>Funding your lifestyle:</b> <b>{comparison_risk['invest_sustain_probability']:.1%}</b> of simulated paths paid the planned withdrawals through age {planning_age}.</div>
-          <div class="risk-point"><b>Other risks:</b> market crashes, concentration, selling during downturns, fees, liquidity, and currency risk.</div>
-        </div>""", unsafe_allow_html=True)
-    st.caption(
-        f"Investment risk uses {int(simulations):,} simulated market paths with "
-        f"{comparison_volatility:.1f}% assumed annual volatility; it does not include fees, taxes or changing inflation. "
-        "Bank figures use constant rates and a separate 2-percentage-point lower-rate stress test; "
-        "bank risk is not assigned a fictional success probability. Deposit protection depends on your country, institution and balance."
-    )
-    if comparison_risk["bank_loses_purchasing_power"]:
-        st.warning("With these assumptions, bank interest is below inflation. The balance can rise in nominal money while buying less over time.")
-    st.markdown(
-        '<div class="insight-strip"><b>How to choose:</b> Bank deposits may fit short-term goals and emergency money when access and protection are suitable. '
-        'Diversified investments may fit longer horizons if you can withstand temporary losses. '
-        'Neither strategy guarantees retirement funding; a mix can balance liquidity and growth.</div>',
-        unsafe_allow_html=True,
-    )
-
-    mode_col, period_col = st.columns(2)
-    with mode_col:
-        comparison_money_mode = st.selectbox("Display balances in", ["Today's purchasing power", "Future nominal money"], key="bank_compare_money_mode")
-    with period_col:
-        comparison_period = st.selectbox("Show period", ["Entire timeline", "Retirement years only"], key="bank_compare_phase")
-    comparison_table = comparison_result["annual"]
-    if comparison_period == "Retirement years only":
-        comparison_table = comparison_table.loc[comparison_table["Age"] >= int(retirement_age)]
-    suffix = "real" if comparison_money_mode.startswith("Today") else "nominal"
-    bank_trace = f"Bank {suffix}"
-    invest_trace = f"Investing {suffix}"
-    display_view = st.selectbox(
-        "Chart view", ["Growth comparison", "Risk range and rate stress"],
-        key="bank_vs_investing_chart_view",
-        help="Choose one full-width view to avoid overcrowding the dashboard.",
-    )
-    if display_view == "Growth comparison":
-        fig_bank_compare = go.Figure()
-        fig_bank_compare.add_trace(go.Scatter(
-            x=comparison_table["Age"], y=comparison_table[bank_trace],
-            name="Bank savings", mode="lines", line=dict(color="#305e90", width=3),
-            hovertemplate="Age %{x:.0f}<br>Bank: %{y:,.0f}<extra></extra>",
-        ))
-        fig_bank_compare.add_trace(go.Scatter(
-            x=comparison_table["Age"], y=comparison_table[invest_trace],
-            name="Investing", mode="lines", line=dict(color="#099d91", width=3),
-            hovertemplate="Age %{x:.0f}<br>Investing: %{y:,.0f}<extra></extra>",
-        ))
-        fig_bank_compare.add_vline(x=int(retirement_age), line_dash="dot", line_color="#c9a65c")
-        fig_bank_compare.update_xaxes(title="Age")
-        st.plotly_chart(plot_layout(fig_bank_compare, height=420, y_label=f"Portfolio value ({CURRENCY})"), use_container_width=True)
-    else:
-        # Investment P10/P50/P90 comes from annual market-return simulations.
-        # Bank lower-rate line is a constant-rate scenario, not a probability band.
-        fan_risk = comparison_risk["fan"].copy()
-        bank_downside = compare_bank_and_investment(
-            current_age=int(current_age), retirement_age=int(retirement_age),
-            planning_age=int(planning_age), starting_balance=compare_initial,
-            monthly_saving=float(retirement_contribution), monthly_spending=float(target_income),
-            bank_rate_pct=comparison_risk["bank_lower_rate_pct"],
-            investing_rate_pct=compare_investing_rate, inflation_pct=float(inflation),
-        )["annual"]
-        if comparison_period == "Retirement years only":
-            fan_risk = fan_risk.loc[fan_risk["Age"] >= int(retirement_age)]
-            bank_downside = bank_downside.loc[bank_downside["Age"] >= int(retirement_age)]
-        if suffix == "nominal":
-            fan_multiplier = (1 + inflation/100.0) ** (fan_risk["Age"] - int(current_age))
-            for label in ("P10", "Median", "P90"):
-                fan_risk[label] = fan_risk[label] * fan_multiplier
-        fig_risks = go.Figure()
-        fig_risks.add_trace(go.Scatter(
-            x=fan_risk["Age"], y=fan_risk["P90"],
-            mode="lines", line=dict(width=0), name="Investing 10th–90th range",
-            hoverinfo="skip", showlegend=False,
-        ))
-        fig_risks.add_trace(go.Scatter(
-            x=fan_risk["Age"], y=fan_risk["P10"],
-            mode="lines", line=dict(width=0), fill="tonexty",
-            fillcolor="rgba(5,156,139,.17)", name="Investing 10th–90th range",
-            hovertemplate="Age %{x:.0f}<br>10th percentile: %{y:,.0f}<extra></extra>",
-        ))
-        fig_risks.add_trace(go.Scatter(
-            x=fan_risk["Age"], y=fan_risk["Median"],
-            mode="lines", line=dict(color="#009b8c", width=3), name="Investing median",
-        ))
-        fig_risks.add_trace(go.Scatter(
-            x=comparison_table["Age"], y=comparison_table[bank_trace],
-            mode="lines", line=dict(color="#416e9d", width=3), name="Bank · fixed base rate",
-        ))
-        fig_risks.add_trace(go.Scatter(
-            x=bank_downside["Age"], y=bank_downside[f"Bank {suffix}"],
-            mode="lines", line=dict(color="#d79243", width=2, dash="dash"),
-            name=f"Bank · {comparison_risk['bank_lower_rate_pct']:.1f}% stress rate",
-        ))
-        fig_risks.add_vline(x=int(retirement_age), line_color="#c9a65c", line_dash="dot")
-        fig_risks.update_xaxes(title="Age")
-        st.plotly_chart(plot_layout(fig_risks, height=425, y_label=f"Portfolio value ({CURRENCY})"), use_container_width=True)
-        st.caption(
-            "The shaded band is the middle 80% of simulated investment balances at each age—not a guarantee. "
-            "The bank stress line assumes a rate two percentage points lower throughout the comparison. "
-            "Different return paths may run out of money at different times."
-        )
-    st.caption(
-        f"Bank rate {bank_rate:.1f}% vs investing return {compare_investing_rate:.1f}% nominal annually; "
-        f"inflation {inflation:.1f}%. Both start with {money(compare_initial)} and save "
-        f"{money(retirement_contribution)} monthly until age {retirement_age}, then seek "
-        f"{money(target_income)} monthly in today's purchasing power through age {planning_age}. "
-        "Savings and withdrawals rise with inflation in nominal terms. "
-        "Constant returns, no fees/taxes or FX risk; bank rates may change and investments can lose value. "
-        "This comparison is illustrative, not a risk-adjusted recommendation."
-    )
-    if isinstance(linked_result, dict):
-        if linked_value is not None:
-            st.info(
-                f"Offline portfolio link available: you entered {money(linked_value)} of investments "
-                "in the selected currency. Choose this balance only if you will not count it twice "
-                "in your retirement savings."
-            )
-        else:
-            st.info("Re-analyze your Investments tab using the selected currency to connect it "
-                    "with this comparison. No exchange conversion is performed.")
-        if return_source.startswith("Your portfolio"):
-            st.caption("The linked portfolio return is a weighted **assumption you entered**, "
-                       "not an observed historical return or a prediction.")
-
-    st.download_button(
-        "⬇ Download bank vs investing CSV",
-        data=comparison_result["annual"].to_csv(index=False).encode("utf-8-sig"),
-        file_name="bank_vs_investing_retirement.csv", mime="text/csv",
-    )
-
-# Existing loan + retirement combined PDF stays unchanged.
 report_data = generate_pdf_report(
     code=currency_choice.split(" ")[0],
     loan={
@@ -1469,10 +1260,7 @@ report_data = generate_pdf_report(
     retirement_insights=retirement_insights,
     investment_insights=investment_insights,
     retirement_life_df=retirement_yearly,
-    safe_spending=safe_spending,
     inflation_df=inflation_table,
-    bank_comparison=comparison_result,
-    bank_risk=comparison_risk,
 )
 with st.sidebar:
     st.divider()
@@ -1484,9 +1272,9 @@ with st.sidebar:
         mime="application/pdf",
         use_container_width=True,
     )
-    st.caption("Includes mortgage, retirement, and bank vs investing comparisons. Download the separate portfolio PDF inside Investments.")
+    st.caption("Includes your loan and retirement results, scenarios, and inflation analysis.")
     st.divider()
-    st.caption("Retirement assumptions and portfolio valuations are educational estimates, not guarantees.")
+    st.caption("Retirement return and inflation assumptions are educational estimates, not guarantees.")
 
 with retirement_tab:
     st.markdown("#### Download your financial report")
@@ -1499,4 +1287,4 @@ with retirement_tab:
 
 
 st.divider()
-st.caption("Financial Future Planner · v5.2 Risk Comparison Edition · Educational estimates; not financial advice")
+st.caption("Financial Future Planner · Munkhjin Bataa · Educational estimates; not financial advice")

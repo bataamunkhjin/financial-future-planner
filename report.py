@@ -149,10 +149,7 @@ def generate_pdf_report(
     investment_sensitivity: pd.DataFrame | None = None,
     savings_goal: dict | None = None,
     retirement_life_df: pd.DataFrame | None = None,
-    safe_spending: dict | None = None,
     inflation_df: pd.DataFrame | None = None,
-    bank_comparison: dict | None = None,
-    bank_risk: dict | None = None,
 ) -> bytes:
     """Generate a small multi-page financial report from already-calculated app data."""
     code = code if code in {"USD", "MNT", "EUR"} else "CUR"
@@ -160,7 +157,7 @@ def generate_pdf_report(
     styles = _styles()
     width = A4[0] - 84
     doc = BaseDocTemplate(buf, pagesize=A4, leftMargin=42, rightMargin=42, topMargin=50, bottomMargin=45,
-        title="Financial Future Planner Report", author="Financial Future Planner")
+        title="Financial Future Planner Report", author="Munkhjin Bataa")
     frame = Frame(42, 45, width, A4[1]-95, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
     doc.addPageTemplates(PageTemplate(id="report", frames=[frame], onPage=_page))
     story = []
@@ -170,7 +167,7 @@ def generate_pdf_report(
     def table(headers, rows, widths): story.append(_table(headers, rows, widths, styles)); story.append(Spacer(1, 6))
 
     story.append(_p("Your financial planning report", styles["ReportTitle"]))
-    story.append(_p(f"Prepared {date.today():%d %B %Y}  |  {code}  |  Two linked planning models", styles["ReportSub"]))
+    story.append(_p(f"Munkhjin Bataa  |  {date.today():%d %B %Y}  |  {code}", styles["ReportSub"]))
     para("This report summarizes the assumptions and automatic what-if analysis currently entered in the app. Figures are estimates, not offers or guarantees.")
     heading("01  |  Mortgage and loan analysis")
     table(["Loan input", "Value", "Loan output", "Value"], [
@@ -290,23 +287,13 @@ def generate_pdf_report(
     ], [149, width - 149])
     small("This is a simplified education-only analysis: do not substitute these outputs for a real lender quote, financial advisor, actuarial plan, or personalized investment recommendation.")
 
-    if retirement_life_df is not None and safe_spending is not None and inflation_df is not None:
+    if retirement_life_df is not None and inflation_df is not None:
         story.append(PageBreak())
-        heading("05  |  Lifetime spending and purchasing power (v4)")
+        heading("05  |  Lifetime spending and purchasing power")
         para(
             "The retirement life simulator keeps investment earnings running after retirement, "
             "stops contributions, and deducts spending every month. The figures below are in "
             "today's purchasing power unless labeled nominal."
-        )
-        heading("Model-supported monthly spending")
-        table(["Simulated success target", "Monthly amount (real)", "Actual success on sampled paths"], [
-            [f'{row["Success Target"]:.0%}', _currency(row["Monthly Spending"], code),
-             f'{row["Simulated Success"]:.1%}']
-            for _, row in safe_spending["options"].iterrows()
-        ], [163, 165, width - 328])
-        small(
-            "These are empirical simulated spending thresholds, NOT guaranteed safe amounts. "
-            "The return assumptions, fixed inflation and 1,000/2,000 modeled paths may not match actual markets."
         )
         heading("Retirement life simulator - yearly checkpoints")
         start_age = retirement["retirement_age"]
@@ -335,63 +322,6 @@ def generate_pdf_report(
             "Nominal future amounts rise with the assumed inflation rate; this does not mean "
             "a higher standard of living. No foreign exchange conversion is performed."
         )
-
-    if bank_comparison is not None:
-        story.append(PageBreak())
-        heading("06  |  Bank savings vs investing")
-        para("Both strategies use identical starting funds, monthly contributions, retirement date "
-             "and target monthly spending. The two strategies differ only by their assumed constant nominal returns.")
-        table(["Assumption", "Bank savings", "Investing"], [
-            ["Assumed nominal annual return", f'{bank_comparison["bank_rate_pct"]:.1f}%',
-             f'{bank_comparison["investing_rate_pct"]:.1f}%'],
-            ["Starting savings", _currency(bank_comparison["starting_balance"], code),
-             _currency(bank_comparison["starting_balance"], code)],
-            ["Portfolio at retirement (real)", _currency(bank_comparison["retirement_balances"]["Bank"], code),
-             _currency(bank_comparison["retirement_balances"]["Investing"], code)],
-            ["Portfolio at planning age (real)", _currency(bank_comparison["ending_balances"]["Bank"], code),
-             _currency(bank_comparison["ending_balances"]["Investing"], code)],
-            ["Total missed spending (real)", _currency(bank_comparison["shortfalls"]["Bank"], code),
-             _currency(bank_comparison["shortfalls"]["Investing"], code)],
-        ], [width*0.38, width*0.31, width*0.31])
-        annual = bank_comparison["annual"]
-        heading("Savings and retirement spending - today's purchasing power")
-        story.append(_line_chart([
-            ("Bank savings", annual["Age"].to_numpy(), annual["Bank real"].to_numpy(), BLUE),
-            ("Investing", annual["Age"].to_numpy(), annual["Investing real"].to_numpy(), TEAL),
-        ], width=width, height=150))
-        small("Assumes constant rates, inflation-adjusted deposits and withdrawals, "
-              "no taxes, fees, or changing deposit rates. The bank rate is illustrative, not a live offer; "
-              "investing returns are uncertain. If the starting value includes a live-priced portfolio, "
-              "the USD value was converted using an estimated exchange rate. Any historical portfolio "
-              "return used is a retrospective proxy for listed holdings, not a future prediction.")
-        if bank_risk is not None:
-            heading("Risk comparison - what could go wrong?")
-            table(["Risk factor", "Bank deposits", "Investing"], [
-                ["Annual return after inflation (assumed)",
-                 f'{bank_risk["bank_real_return_pct"]:+.2f}%',
-                 "Variable; cannot guarantee a real return"],
-                ["Lower-rate / downside at retirement",
-                 _currency(bank_risk["bank_lower_rate_retirement_balance"], code),
-                 _currency(bank_risk["invest_p10_at_retirement"], code)],
-                ["Chance of negative one-year market return",
-                 "Not modeled as a market asset",
-                 f'{bank_risk["invest_one_year_loss_probability"]:.1%} (modeled)'],
-                ["Funding monthly withdrawals to planning age",
-                 "Yes (fixed rate)" if bank_risk["bank_base_sustains"] else "No (fixed rate)",
-                 f'{bank_risk["invest_sustain_probability"]:.1%} of simulated paths'],
-            ], [width*0.38, width*0.31, width*0.31])
-            small(
-                f'Bank stress: the deposit rate is {bank_risk["bank_lower_rate_pct"]:.1f}% instead of '
-                f'{bank_comparison["bank_rate_pct"]:.1f}% for the whole timeline. '
-                f'Investment downside uses {bank_risk["scenarios"]:,} hypothetical paths at '
-                f'{bank_risk["investment_volatility_pct"]:.1f}% annual volatility. '
-                'The downside bank outcome is a rate scenario, whereas the investment 10th percentile '
-                'is a simulation quantile; they are not probabilities of equivalent events.'
-            )
-            small("Bank risks include inflation, changing deposit rates, deposit-insurance limits "
-                  "and withdrawal restrictions. Investment risks include market losses, volatility, "
-                  "liquidity, fees, concentration and currency exposure. Neither choice is risk free. "
-                  "Deposit protection varies by country and institution; no insurance eligibility is assumed.")
 
     doc.build(story)
     return buf.getvalue()
