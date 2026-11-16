@@ -48,9 +48,9 @@ st.markdown(
     """
     <style>
     /* Financial Future Planner v5.5: minimalist, school-branded fintech UI. */
-    :root { --navy:#14283c; --navy-soft:#294052; --teal:#087f7a;
-            --mint:#16a394; --gold:#d5aa51; --muted:#6e8091;
-            --line:#e3eaf0; --canvas:#f5f7fa; --white:#ffffff; }
+    :root { --navy:#edf3fa; --navy-soft:#d2e0ed; --teal:#38d6c3;
+            --mint:#29bda7; --gold:#d5aa51; --muted:#9ab0c3;
+            --line:#2b3b50; --canvas:#0b1220; --white:#142236; }
 
     html, body, [data-testid="stAppViewContainer"],
     [data-testid="stSidebar"] {font-family: Inter,"Segoe UI",Arial,sans-serif;}
@@ -235,6 +235,43 @@ st.markdown(
         .planner-hero .hero-subtext {font-size:.80rem;}
         [data-testid="stMetric"] {min-height:100px;padding:12px;}
     }
+
+    /* Dark edition overrides: preserve existing layouts and calculations. */
+    section[data-testid="stSidebar"] {background:#101b2b !important; border-right:1px solid var(--line);}
+    section[data-testid="stSidebar"] h3 {color:#edf3fa;}
+    section[data-testid="stSidebar"] p {color:#a4b5c7;}
+    .sidebar-hint {background:#142639;border-color:#2b4054;color:#b9cbd8;}
+    .planner-hero {background:#142236;border-color:#293f55;
+        box-shadow:0 14px 34px rgba(0,0,0,.20);}
+    .planner-hero .hero-subtext,.masthead-note {color:#aebfd0;}
+    /* Keep the original AUM logo legible; its lettering is dark blue. */
+    .university-logo-wrap {background:#f8fafc;border:0;border-radius:12px;
+        padding:13px 16px;max-width:36%;}
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button {color:#b1c0d0;}
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button[aria-selected="true"] {
+        background:#1b2c40;color:#f0f7fc;border-color:#2b3b50;
+        border-bottom:2px solid var(--teal);}
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button:hover {
+        background:#1a3043;color:#55e6d4;}
+    .block-container [data-testid="stCaptionContainer"] p,
+    .block-container .stCaption p {color:#a3b5c6;}
+    [data-testid="stVerticalBlockBorderWrapper"]:has(> div [data-testid="stTextInput"]) {
+        border-color:#2b3b50 !important;}
+    [data-testid="stWidgetLabel"] label,
+    [data-testid="stMetricLabel"] {color:#adbed0;}
+    [data-testid="stExpander"] {background:#142236;border-color:#2b3b50;}
+    [data-testid="stExpander"] summary {color:#c4d5e3;}
+    [data-testid="stMetric"] {background:#142236;border-color:#2b3b50;
+        box-shadow:0 9px 18px rgba(0,0,0,.16);}
+    [data-testid="stMetricValue"] {color:#f0f6fb;}
+    [data-testid="stPlotlyChart"] {background:#142236;border-color:#2b3b50;
+        box-shadow:0 9px 18px rgba(0,0,0,.14);}
+    [data-testid="stDataFrame"] {border-color:#2b3b50;}
+    [data-testid="stDownloadButton"] button[kind="secondary"],
+    [data-testid="stDownloadButton"] button {
+        color:#65e3d1;background:#14332f;border-color:#265b58;}
+    [data-testid="stDownloadButton"] button:hover {
+        color:#a4fff4;background:#184640;border-color:#4cd8c7;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -337,32 +374,32 @@ def months_as_text(months: int) -> str:
 def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -> go.Figure:
     """One coherent, readable figure style across both financial planners."""
     fig.update_layout(
-        template="plotly_white",
+        template="plotly_dark",
         height=height,
         margin=dict(l=22, r=26, t=52, b=32),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(
             orientation="h", y=1.15, x=0,
-            bgcolor="rgba(255,255,255,0)",
-            font=dict(size=11, color="#576c7e"),
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(size=11, color="#bed0df"),
             itemclick="toggle", itemdoubleclick="toggleothers",
         ),
         hovermode="x unified",
-        font=dict(family="Inter, Segoe UI, Arial, sans-serif", size=12, color="#566c80"),
+        font=dict(family="Inter, Segoe UI, Arial, sans-serif", size=12, color="#d2e0ed"),
         colorway=["#0f938a", "#526e9d", "#dbaa52", "#8a81be", "#91a6b7"],
-        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#dbe5ec", font_size=12),
+        hoverlabel=dict(bgcolor="#162a3e", bordercolor="#315062", font_size=12),
     )
     fig.update_xaxes(
-        showgrid=False, zeroline=False, linecolor="#e3e9ef",
-        ticks="outside", tickcolor="#cbd8e2",
-        title_font=dict(size=11, color="#738598"),
+        showgrid=False, zeroline=False, linecolor="#314458",
+        ticks="outside", tickcolor="#536b83",
+        title_font=dict(size=11, color="#a6bbcd"),
     )
     fig.update_yaxes(
         gridcolor="rgba(128,148,164,.13)", zeroline=False,
         title=y_label, separatethousands=True,
-        title_font=dict(size=11, color="#738598"),
-        tickfont=dict(color="#6e8394"),
+        title_font=dict(size=11, color="#a6bbcd"),
+        tickfont=dict(color="#a6bbcd"),
     )
     return fig
 
