@@ -38,6 +38,7 @@ from finance import (
 from report import generate_pdf_report
 from portfolio_ui import render_investment_tab, cached_fx
 from savings_comparison import compare_bank_and_investment
+from risk_comparison import compare_savings_investing_risks
 
 
 st.set_page_config(
@@ -90,6 +91,18 @@ st.markdown(
     .asset-eyebrow {font-size:.7rem;font-weight:800;letter-spacing:.12em;color:#9ee9dd;}
     .linked-ribbon {padding:17px 20px;border:1px solid #c8e4e5;border-left:5px solid #078e93;border-radius:13px;background:#eff9f9;display:flex;flex-direction:column;gap:5px;margin:20px 0;color:#173d4f;}
     .linked-ribbon span {color:#597987;font-size:.89rem;line-height:1.5;}
+
+    /* Simple bank-versus-investing cards; balanced on desktop, stacked on mobile. */
+    .risk-panel {background:#fff;border:1px solid #d8e7eb;border-radius:17px;
+        padding:17px 20px; min-height:365px;box-shadow:0 5px 20px rgba(20,61,80,.045);}
+    .risk-panel.bank {border-top:4px solid #426d9b;}
+    .risk-panel.invest {border-top:4px solid #049b8b;}
+    .risk-panel .risk-heading{font-size:1.02rem;color:#123347;font-weight:800;margin-bottom:6px;}
+    .risk-panel .risk-sub{font-size:.84rem;line-height:1.55;color:#526a79;margin-bottom:10px;}
+    .risk-panel .risk-number{font-size:1.48rem;color:#183d50;font-weight:800;letter-spacing:-.025em;}
+    .risk-panel .risk-caption{font-size:.79rem;color:#5c7585;margin-bottom:10px;}
+    .risk-panel .risk-point{font-size:.85rem;line-height:1.55;color:#365466;margin:8px 0;}
+    .risk-panel .risk-point b {color:#1b455a;}
     .planner-hero .hero-eyebrow {color: #8ee2cc; font-size: .76rem; letter-spacing: .12em; font-weight: 800; margin: 0 0 6px;}
     [data-testid="stMetric"] {
         background: #fff; padding: 16px; border-radius: 16px;
@@ -110,6 +123,7 @@ st.markdown(
         .chip-row {gap:5px;}
         .planner-hero h1 {font-size: 1.5rem;}
         [data-testid="stMetricValue"] {font-size: 1.22rem;}
+        .risk-panel {min-height:0;}
     }
     </style>
     """,
@@ -1188,6 +1202,7 @@ with retirement_tab:
     linked_value = None
     linked_return = None
     linked_coverage = 0.0
+    linked_volatility = None
     if isinstance(linked_result, dict):
         linked_summary = linked_result.get("summary") or {}
         linked_hist = linked_result.get("history") or {}
@@ -1207,6 +1222,11 @@ with retirement_tab:
             historical_rate = 100*float(linked_metrics["annualized_return"])
             if -30.0 <= historical_rate <= 30.0:
                 linked_return = historical_rate
+        if (linked_metrics and linked_coverage >= 0.80
+                and int(linked_metrics.get("weeks", 0)) >= 26):
+            historical_vol_pct = float(linked_metrics.get("volatility", 0.0)) * 100.0
+            if 0.0 < historical_vol_pct <= 60.0:
+                linked_volatility = historical_vol_pct
 
     with st.expander("Optional comparison assumptions", expanded=False):
         st.caption("These settings affect only this comparison, not your existing retirement projections.")
@@ -1229,6 +1249,13 @@ with retirement_tab:
             return_sources.append("Historical listed-portfolio return (illustrative only)")
         return_source = st.selectbox("Investing return for this comparison", return_sources,
                                      help="A historical portfolio return is NOT a prediction; market returns fluctuate. Only listed assets with available history are included.")
+        risk_vol_sources = ["Retirement volatility assumption"]
+        if linked_volatility is not None:
+            risk_vol_sources.append("Historical listed-portfolio volatility (illustrative)")
+        risk_vol_source = st.selectbox(
+            "Volatility used for risk scenarios", risk_vol_sources,
+            help="The first option reuses your existing retirement setting. Historical volatility is based only on listed holdings with overlapping price history; neither forecasts future losses.",
+        )
 
     compare_initial = float(retirement_savings)
     if savings_source.startswith("Your analyzed") and linked_value is not None:
@@ -1243,6 +1270,14 @@ with retirement_tab:
         bank_rate_pct=float(bank_rate), investing_rate_pct=compare_investing_rate,
         inflation_pct=float(inflation),
     )
+    comparison_volatility = (
+        linked_volatility if risk_vol_source.startswith("Historical")
+        and linked_volatility is not None else float(volatility)
+    )
+    comparison_risk = compare_savings_investing_risks(
+        comparison_result, annual_volatility_pct=float(comparison_volatility),
+        scenarios=int(simulations), seed=42,
+    )
     b1, b2, b3 = st.columns(3)
     b1.metric("Bank at retirement", money(comparison_result["retirement_balances"]["Bank"]))
     b2.metric("Investing at retirement", money(comparison_result["retirement_balances"]["Investing"]))
@@ -1252,6 +1287,51 @@ with retirement_tab:
     invest_age = comparison_result["first_shortfall_ages"]["Investing"]
     b4.metric("Bank funds monthly lifestyle", f"Through age {planning_age}" if bank_age is None else f"Until ~age {bank_age:.1f}")
     b5.metric("Investments fund monthly lifestyle", f"Through age {planning_age}" if invest_age is None else f"Until ~age {invest_age:.1f}")
+
+    st.markdown("##### Risks you should compare")
+    real_bank_yield = comparison_risk["bank_real_return_pct"]
+    real_yield_note = (
+        "Below inflation — purchasing power erodes"
+        if comparison_risk["bank_loses_purchasing_power"]
+        else "At or above assumed inflation (before taxes and fees)"
+    )
+    risk_bank, risk_invest = st.columns(2, gap="large")
+    with risk_bank:
+        st.markdown(f"""
+        <div class="risk-panel bank">
+          <div class="risk-heading">🏦 Bank savings <span style="font-weight:500;color:#627788">· rate-sensitive</span></div>
+          <div class="risk-sub">Predictable nominal interest only while the offered rate and terms hold.</div>
+          <div class="risk-number">{real_bank_yield:+.2f}%</div>
+          <div class="risk-caption">Assumed annual return after inflation</div>
+          <div class="risk-point"><b>Purchasing-power risk:</b> {real_yield_note}.</div>
+          <div class="risk-point"><b>Lower-rate scenario:</b> {comparison_risk['bank_lower_rate_pct']:.1f}% instead of {bank_rate:.1f}% annually; projected retirement savings fall by <b>{money(comparison_risk['bank_interest_stress_difference'])}</b>.</div>
+          <div class="risk-point"><b>Other risks:</b> bank failure/insurance limits, early withdrawal restrictions, inflation, taxes, and currency risk.</div>
+        </div>""", unsafe_allow_html=True)
+    with risk_invest:
+        st.markdown(f"""
+        <div class="risk-panel invest">
+          <div class="risk-heading">📈 Investing <span style="font-weight:500;color:#627788">· market-sensitive</span></div>
+          <div class="risk-sub">Higher potential growth, but balances can decline and returns vary each year.</div>
+          <div class="risk-number">{comparison_risk['invest_one_year_loss_probability']:.1%}</div>
+          <div class="risk-caption">Modeled chance of a negative one-year nominal return</div>
+          <div class="risk-point"><b>Lower-tail outcome:</b> 10th-percentile savings at retirement are <b>{money(comparison_risk['invest_p10_at_retirement'])}</b> in today's money.</div>
+          <div class="risk-point"><b>Funding your lifestyle:</b> <b>{comparison_risk['invest_sustain_probability']:.1%}</b> of simulated paths paid the planned withdrawals through age {planning_age}.</div>
+          <div class="risk-point"><b>Other risks:</b> market crashes, concentration, selling during downturns, fees, liquidity, and currency risk.</div>
+        </div>""", unsafe_allow_html=True)
+    st.caption(
+        f"Investment risk uses {int(simulations):,} simulated market paths with "
+        f"{comparison_volatility:.1f}% assumed annual volatility; it does not include fees, taxes or changing inflation. "
+        "Bank figures use constant rates and a separate 2-percentage-point lower-rate stress test; "
+        "bank risk is not assigned a fictional success probability. Deposit protection depends on your country, institution and balance."
+    )
+    if comparison_risk["bank_loses_purchasing_power"]:
+        st.warning("With these assumptions, bank interest is below inflation. The balance can rise in nominal money while buying less over time.")
+    st.markdown(
+        '<div class="insight-strip"><b>How to choose:</b> Bank deposits may fit short-term goals and emergency money when access and protection are suitable. '
+        'Diversified investments may fit longer horizons if you can withstand temporary losses. '
+        'Neither strategy guarantees retirement funding; a mix can balance liquidity and growth.</div>',
+        unsafe_allow_html=True,
+    )
 
     mode_col, period_col = st.columns(2)
     with mode_col:
@@ -1264,20 +1344,77 @@ with retirement_tab:
     suffix = "real" if comparison_money_mode.startswith("Today") else "nominal"
     bank_trace = f"Bank {suffix}"
     invest_trace = f"Investing {suffix}"
-    fig_bank_compare = go.Figure()
-    fig_bank_compare.add_trace(go.Scatter(
-        x=comparison_table["Age"], y=comparison_table[bank_trace],
-        name="Bank savings", mode="lines", line=dict(color="#305e90", width=3),
-        hovertemplate="Age %{x:.0f}<br>Bank: %{y:,.0f}<extra></extra>",
-    ))
-    fig_bank_compare.add_trace(go.Scatter(
-        x=comparison_table["Age"], y=comparison_table[invest_trace],
-        name="Investing", mode="lines", line=dict(color="#099d91", width=3),
-        hovertemplate="Age %{x:.0f}<br>Investing: %{y:,.0f}<extra></extra>",
-    ))
-    fig_bank_compare.add_vline(x=int(retirement_age), line_dash="dot", line_color="#c9a65c")
-    fig_bank_compare.update_xaxes(title="Age")
-    st.plotly_chart(plot_layout(fig_bank_compare, height=420, y_label=f"Portfolio value ({CURRENCY})"), use_container_width=True)
+    display_view = st.selectbox(
+        "Chart view", ["Growth comparison", "Risk range and rate stress"],
+        key="bank_vs_investing_chart_view",
+        help="Choose one full-width view to avoid overcrowding the dashboard.",
+    )
+    if display_view == "Growth comparison":
+        fig_bank_compare = go.Figure()
+        fig_bank_compare.add_trace(go.Scatter(
+            x=comparison_table["Age"], y=comparison_table[bank_trace],
+            name="Bank savings", mode="lines", line=dict(color="#305e90", width=3),
+            hovertemplate="Age %{x:.0f}<br>Bank: %{y:,.0f}<extra></extra>",
+        ))
+        fig_bank_compare.add_trace(go.Scatter(
+            x=comparison_table["Age"], y=comparison_table[invest_trace],
+            name="Investing", mode="lines", line=dict(color="#099d91", width=3),
+            hovertemplate="Age %{x:.0f}<br>Investing: %{y:,.0f}<extra></extra>",
+        ))
+        fig_bank_compare.add_vline(x=int(retirement_age), line_dash="dot", line_color="#c9a65c")
+        fig_bank_compare.update_xaxes(title="Age")
+        st.plotly_chart(plot_layout(fig_bank_compare, height=420, y_label=f"Portfolio value ({CURRENCY})"), use_container_width=True)
+    else:
+        # Investment P10/P50/P90 comes from annual market-return simulations.
+        # Bank lower-rate line is a constant-rate scenario, not a probability band.
+        fan_risk = comparison_risk["fan"].copy()
+        bank_downside = compare_bank_and_investment(
+            current_age=int(current_age), retirement_age=int(retirement_age),
+            planning_age=int(planning_age), starting_balance=compare_initial,
+            monthly_saving=float(retirement_contribution), monthly_spending=float(target_income),
+            bank_rate_pct=comparison_risk["bank_lower_rate_pct"],
+            investing_rate_pct=compare_investing_rate, inflation_pct=float(inflation),
+        )["annual"]
+        if comparison_period == "Retirement years only":
+            fan_risk = fan_risk.loc[fan_risk["Age"] >= int(retirement_age)]
+            bank_downside = bank_downside.loc[bank_downside["Age"] >= int(retirement_age)]
+        if suffix == "nominal":
+            fan_multiplier = (1 + inflation/100.0) ** (fan_risk["Age"] - int(current_age))
+            for label in ("P10", "Median", "P90"):
+                fan_risk[label] = fan_risk[label] * fan_multiplier
+        fig_risks = go.Figure()
+        fig_risks.add_trace(go.Scatter(
+            x=fan_risk["Age"], y=fan_risk["P90"],
+            mode="lines", line=dict(width=0), name="Investing 10th–90th range",
+            hoverinfo="skip", showlegend=False,
+        ))
+        fig_risks.add_trace(go.Scatter(
+            x=fan_risk["Age"], y=fan_risk["P10"],
+            mode="lines", line=dict(width=0), fill="tonexty",
+            fillcolor="rgba(5,156,139,.17)", name="Investing 10th–90th range",
+            hovertemplate="Age %{x:.0f}<br>10th percentile: %{y:,.0f}<extra></extra>",
+        ))
+        fig_risks.add_trace(go.Scatter(
+            x=fan_risk["Age"], y=fan_risk["Median"],
+            mode="lines", line=dict(color="#009b8c", width=3), name="Investing median",
+        ))
+        fig_risks.add_trace(go.Scatter(
+            x=comparison_table["Age"], y=comparison_table[bank_trace],
+            mode="lines", line=dict(color="#416e9d", width=3), name="Bank · fixed base rate",
+        ))
+        fig_risks.add_trace(go.Scatter(
+            x=bank_downside["Age"], y=bank_downside[f"Bank {suffix}"],
+            mode="lines", line=dict(color="#d79243", width=2, dash="dash"),
+            name=f"Bank · {comparison_risk['bank_lower_rate_pct']:.1f}% stress rate",
+        ))
+        fig_risks.add_vline(x=int(retirement_age), line_color="#c9a65c", line_dash="dot")
+        fig_risks.update_xaxes(title="Age")
+        st.plotly_chart(plot_layout(fig_risks, height=425, y_label=f"Portfolio value ({CURRENCY})"), use_container_width=True)
+        st.caption(
+            "The shaded band is the middle 80% of simulated investment balances at each age—not a guarantee. "
+            "The bank stress line assumes a rate two percentage points lower throughout the comparison. "
+            "Different return paths may run out of money at different times."
+        )
     st.caption(
         f"Bank rate {bank_rate:.1f}% vs investing return {compare_investing_rate:.1f}% nominal annually; "
         f"inflation {inflation:.1f}%. Both start with {money(compare_initial)} and save "
@@ -1347,6 +1484,7 @@ report_data = generate_pdf_report(
     safe_spending=safe_spending,
     inflation_df=inflation_table,
     bank_comparison=comparison_result,
+    bank_risk=comparison_risk,
 )
 with st.sidebar:
     st.divider()
@@ -1373,4 +1511,4 @@ with retirement_tab:
 
 
 st.divider()
-st.caption("Financial Future Planner · v5.1 Linked Planning Edition · Educational estimates; not financial advice")
+st.caption("Financial Future Planner · v5.2 Risk Comparison Edition · Educational estimates; not financial advice")

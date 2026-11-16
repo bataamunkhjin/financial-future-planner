@@ -97,6 +97,7 @@ def compare_bank_and_investment(*, current_age: int, retirement_age: int,
         "monthly_spending": monthly_spending,
         "starting_balance": starting_balance,
         "monthly_saving": monthly_saving,
+        "current_age": ages[0],
         "retirement_age": ages[1],
         "planning_age": ages[2],
     }

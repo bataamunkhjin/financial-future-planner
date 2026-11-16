@@ -152,6 +152,7 @@ def generate_pdf_report(
     safe_spending: dict | None = None,
     inflation_df: pd.DataFrame | None = None,
     bank_comparison: dict | None = None,
+    bank_risk: dict | None = None,
 ) -> bytes:
     """Generate a small multi-page financial report from already-calculated app data."""
     code = code if code in {"USD", "MNT", "EUR"} else "CUR"
@@ -363,6 +364,34 @@ def generate_pdf_report(
               "investing returns are uncertain. If the starting value includes a live-priced portfolio, "
               "the USD value was converted using an estimated exchange rate. Any historical portfolio "
               "return used is a retrospective proxy for listed holdings, not a future prediction.")
+        if bank_risk is not None:
+            heading("Risk comparison - what could go wrong?")
+            table(["Risk factor", "Bank deposits", "Investing"], [
+                ["Annual return after inflation (assumed)",
+                 f'{bank_risk["bank_real_return_pct"]:+.2f}%',
+                 "Variable; cannot guarantee a real return"],
+                ["Lower-rate / downside at retirement",
+                 _currency(bank_risk["bank_lower_rate_retirement_balance"], code),
+                 _currency(bank_risk["invest_p10_at_retirement"], code)],
+                ["Chance of negative one-year market return",
+                 "Not modeled as a market asset",
+                 f'{bank_risk["invest_one_year_loss_probability"]:.1%} (modeled)'],
+                ["Funding monthly withdrawals to planning age",
+                 "Yes (fixed rate)" if bank_risk["bank_base_sustains"] else "No (fixed rate)",
+                 f'{bank_risk["invest_sustain_probability"]:.1%} of simulated paths'],
+            ], [width*0.38, width*0.31, width*0.31])
+            small(
+                f'Bank stress: the deposit rate is {bank_risk["bank_lower_rate_pct"]:.1f}% instead of '
+                f'{bank_comparison["bank_rate_pct"]:.1f}% for the whole timeline. '
+                f'Investment downside uses {bank_risk["scenarios"]:,} hypothetical paths at '
+                f'{bank_risk["investment_volatility_pct"]:.1f}% annual volatility. '
+                'The downside bank outcome is a rate scenario, whereas the investment 10th percentile '
+                'is a simulation quantile; they are not probabilities of equivalent events.'
+            )
+            small("Bank risks include inflation, changing deposit rates, deposit-insurance limits "
+                  "and withdrawal restrictions. Investment risks include market losses, volatility, "
+                  "liquidity, fees, concentration and currency exposure. Neither choice is risk free. "
+                  "Deposit protection varies by country and institution; no insurance eligibility is assumed.")
 
     doc.build(story)
     return buf.getvalue()
