@@ -69,8 +69,9 @@ def _starter_holdings():
 
 def render_investment_tab(currency_choice: str):
     """Render the Portfolio tab without affecting loan/retirement tabs."""
-    st.subheader("Investment Portfolio Analyzer")
-    st.caption("Stocks, bond funds, cryptocurrencies, commodity funds, property and manually valued assets — one portfolio.")
+    st.markdown("""<div class="asset-hero"><div class="asset-eyebrow">YOUR INVESTMENT PICTURE</div>
+    <h2>Portfolio insights, made simple.</h2><p>Stocks, bonds, crypto and other assets — one clear overview of performance, allocation and risk.</p></div>""", unsafe_allow_html=True)
+    st.caption("Live prices where available · Manual valuations for property, direct bonds, cash and private holdings")
 
     with st.container(border=True):
         st.markdown("**1 · Enter your holdings**")
@@ -268,27 +269,11 @@ def render_investment_tab(currency_choice: str):
     else:
         st.info("No historical risk chart is available for these holdings. The app still calculates valuations, allocation and available profit/loss.")
 
-    section("Automatic investment insights")
+    section("Portfolio insights", "What stands out in your current holdings and their available market history.")
     for note in portfolio_insights(positions, summary, hist):
         st.markdown('<div class="insight-strip">'+escape(note)+'</div>', unsafe_allow_html=True)
 
-    with st.expander("Financial formulas and interpretation · for your teacher"):
-        st.markdown(r"""
-**Portfolio value:** $V=\sum_i (\text{Units}_i \times \text{Current Price}_i)$.
-
-**Unrealized profit/loss:** Current market value minus purchase cost for positions with a known average purchase price. Does not include trading fees, taxes, or realized sales.
-
-**Annualized volatility:** Standard deviation of **weekly** returns multiplied by $\sqrt{52}$.
-
-**Sharpe ratio:** $(52\times\text{average weekly return}-\text{assumed risk-free rate})/\text{annualized volatility}$. In this educational app the risk-free rate is assumed to be 3% annually.
-
-**Maximum drawdown:** Largest historical percentage decline from a prior peak.
-
-**Historical 95% weekly VaR:** Magnitude of the 5th percentile of observed weekly returns; it is not a worst-case loss.
-
-**Price history limitation:** Adjusted close is used as a proxy for total returns. Current values use actual last closing prices. Historical portfolio performance assumes the current listed units were held over the entire selected period, rather than reconstructing individual trades.
-""")
-
+    st.markdown("""<div class="linked-ribbon"><b>Connect investments with retirement</b><span>Once analyzed, your portfolio value and eligible historical market statistics can be explored in the Retirement tab. The connection is optional and never changes your saved assumptions automatically.</span></div>""", unsafe_allow_html=True)
     st.download_button("📄 Download portfolio PDF summary",
                        data=make_portfolio_pdf(positions, summary, hist, display_code, fx),
                        file_name="portfolio_analysis.pdf", mime="application/pdf")

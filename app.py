@@ -36,7 +36,8 @@ from finance import (
     model_supported_monthly_spending,
 )
 from report import generate_pdf_report
-from portfolio_ui import render_investment_tab
+from portfolio_ui import render_investment_tab, cached_fx
+from savings_comparison import compare_bank_and_investment
 
 
 st.set_page_config(
@@ -83,6 +84,12 @@ st.markdown(
     .planner-hero::after {content:"";position:absolute;width:310px;height:310px;right:-125px;top:-165px;border:54px solid rgba(173,255,227,.075);border-radius:50%;pointer-events:none;}
     .planner-hero h1 {color: #fff; margin: 0; font-size: 2.0rem; line-height: 1.25;}
     .planner-hero p {color: #dcefeb; margin: 8px 0 0; font-size: .99rem;}
+    .asset-hero {background:linear-gradient(114deg,#12344b,#087c82);color:white;padding:25px 29px;border-radius:20px;margin:8px 0 14px;box-shadow:0 10px 28px rgba(20,61,80,.11);}
+    .asset-hero h2 {font-size:1.65rem;color:white;margin:4px 0 8px;}
+    .asset-hero p {margin:0;color:#d8f2f0;font-size:.96rem;}
+    .asset-eyebrow {font-size:.7rem;font-weight:800;letter-spacing:.12em;color:#9ee9dd;}
+    .linked-ribbon {padding:17px 20px;border:1px solid #c8e4e5;border-left:5px solid #078e93;border-radius:13px;background:#eff9f9;display:flex;flex-direction:column;gap:5px;margin:20px 0;color:#173d4f;}
+    .linked-ribbon span {color:#597987;font-size:.89rem;line-height:1.5;}
     .planner-hero .hero-eyebrow {color: #8ee2cc; font-size: .76rem; letter-spacing: .12em; font-weight: 800; margin: 0 0 6px;}
     [data-testid="stMetric"] {
         background: #fff; padding: 16px; border-radius: 16px;
@@ -221,7 +228,7 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
 
 st.markdown(
     """<section class="planner-hero">
-      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER &nbsp; / &nbsp; MULTI-ASSET EDITION v5.0</p>
+      <p class="hero-eyebrow">FINANCIAL FUTURE PLANNER &nbsp; / &nbsp; LINKED PLANNING EDITION v5.1</p>
       <h1>Make confident financial decisions.</h1>
       <p>Clear numbers, richer charts, and a better view of the road ahead.</p>
       <div class="chip-row"><span class="chip">🏠 Loan insights</span><span class="chip">🌱 Retirement planning</span><span class="chip">📊 Multi-asset investing</span><span class="chip">📉 Risk scenarios</span><span class="chip">📄 PDF reporting</span></div>
@@ -1164,6 +1171,142 @@ with loan_tab:
 with investment_tab:
     render_investment_tab(currency_choice)
 
+# ───────────── OPTIONAL BANK SAVINGS VS INVESTING COMPARISON ─────────────
+# Placed AFTER the Investments tab is analyzed so its stored valuation is
+# available immediately, even during the first completed portfolio analysis.
+# It adds a section INSIDE Retirement; it does not create or remove any tabs.
+with retirement_tab:
+    st.markdown("#### Bank savings vs investing")
+    st.markdown(
+        '<div class="linked-ribbon"><b>Two ways to build your retirement savings</b>'
+        '<span>Compare a bank deposit and an investment strategy using the same starting '
+        'money, monthly savings, retirement date and monthly lifestyle budget. '
+        'Only the assumed return differs.</span></div>',
+        unsafe_allow_html=True,
+    )
+    linked_result = st.session_state.get("portfolio_result")
+    linked_value = None
+    linked_return = None
+    linked_coverage = 0.0
+    if isinstance(linked_result, dict):
+        linked_summary = linked_result.get("summary") or {}
+        linked_hist = linked_result.get("history") or {}
+        linked_metrics = linked_hist.get("metrics") or {}
+        linked_coverage = float(linked_summary.get("risk_coverage", 0.0))
+        usd_value = float(linked_summary.get("total_value", 0.0))
+        linked_fx = 1.0
+        if currency_choice.split(" ")[0] != "USD":
+            try:
+                linked_fx = cached_fx(currency_choice.split(" ")[0])
+            except Exception:
+                linked_fx = None
+        if linked_fx is not None and usd_value > 0:
+            linked_value = usd_value * float(linked_fx)
+        if (linked_metrics and linked_coverage >= 0.50
+                and int(linked_metrics.get("weeks", 0)) >= 26):
+            historical_rate = 100*float(linked_metrics["annualized_return"])
+            if -30.0 <= historical_rate <= 30.0:
+                linked_return = historical_rate
+
+    with st.expander("Optional comparison assumptions", expanded=False):
+        st.caption("These settings affect only this comparison, not your existing retirement projections.")
+        bank_rate = st.number_input(
+            "Bank annual interest assumption (%)", min_value=0.0, max_value=40.0,
+            value=9.0 if IS_MNT else (3.0 if currency_choice.startswith("EUR") else 4.0),
+            step=0.5, format="%.1f", key=f"bank_interest_{currency_choice[:3]}",
+            help="Illustrative nominal deposit interest rate, not a live bank offer. Rates, taxes and bank terms can change.",
+        )
+        savings_sources = ["Your retirement savings input"]
+        if linked_value is not None:
+            savings_sources.extend([
+                "Your analyzed investment portfolio instead",
+                "Both balances (only if they are separate funds)",
+            ])
+        savings_source = st.selectbox("Starting money for this comparison", savings_sources,
+                                      help="Portfolio value is converted from USD using the latest available FX estimate. Avoid counting the same investments twice.")
+        return_sources = ["Your retirement expected-return assumption"]
+        if linked_return is not None:
+            return_sources.append("Historical listed-portfolio return (illustrative only)")
+        return_source = st.selectbox("Investing return for this comparison", return_sources,
+                                     help="A historical portfolio return is NOT a prediction; market returns fluctuate. Only listed assets with available history are included.")
+
+    compare_initial = float(retirement_savings)
+    if savings_source.startswith("Your analyzed") and linked_value is not None:
+        compare_initial = float(linked_value)
+    elif savings_source.startswith("Both") and linked_value is not None:
+        compare_initial += float(linked_value)
+    compare_investing_rate = float(linked_return if return_source.startswith("Historical") and linked_return is not None else expected_return)
+    comparison_result = compare_bank_and_investment(
+        current_age=int(current_age), retirement_age=int(retirement_age),
+        planning_age=int(planning_age), starting_balance=compare_initial,
+        monthly_saving=float(retirement_contribution), monthly_spending=float(target_income),
+        bank_rate_pct=float(bank_rate), investing_rate_pct=compare_investing_rate,
+        inflation_pct=float(inflation),
+    )
+    b1, b2, b3 = st.columns(3)
+    b1.metric("Bank at retirement", money(comparison_result["retirement_balances"]["Bank"]))
+    b2.metric("Investing at retirement", money(comparison_result["retirement_balances"]["Investing"]))
+    b3.metric("Investing − bank", money(comparison_result["retirement_balances"]["Investing"]-comparison_result["retirement_balances"]["Bank"]))
+    b4, b5 = st.columns(2)
+    bank_age = comparison_result["first_shortfall_ages"]["Bank"]
+    invest_age = comparison_result["first_shortfall_ages"]["Investing"]
+    b4.metric("Bank funds monthly lifestyle", f"Through age {planning_age}" if bank_age is None else f"Until ~age {bank_age:.1f}")
+    b5.metric("Investments fund monthly lifestyle", f"Through age {planning_age}" if invest_age is None else f"Until ~age {invest_age:.1f}")
+
+    mode_col, period_col = st.columns(2)
+    with mode_col:
+        comparison_money_mode = st.selectbox("Display balances in", ["Today's purchasing power", "Future nominal money"], key="bank_compare_money_mode")
+    with period_col:
+        comparison_period = st.selectbox("Show period", ["Entire timeline", "Retirement years only"], key="bank_compare_phase")
+    comparison_table = comparison_result["annual"]
+    if comparison_period == "Retirement years only":
+        comparison_table = comparison_table.loc[comparison_table["Age"] >= int(retirement_age)]
+    suffix = "real" if comparison_money_mode.startswith("Today") else "nominal"
+    bank_trace = f"Bank {suffix}"
+    invest_trace = f"Investing {suffix}"
+    fig_bank_compare = go.Figure()
+    fig_bank_compare.add_trace(go.Scatter(
+        x=comparison_table["Age"], y=comparison_table[bank_trace],
+        name="Bank savings", mode="lines", line=dict(color="#305e90", width=3),
+        hovertemplate="Age %{x:.0f}<br>Bank: %{y:,.0f}<extra></extra>",
+    ))
+    fig_bank_compare.add_trace(go.Scatter(
+        x=comparison_table["Age"], y=comparison_table[invest_trace],
+        name="Investing", mode="lines", line=dict(color="#099d91", width=3),
+        hovertemplate="Age %{x:.0f}<br>Investing: %{y:,.0f}<extra></extra>",
+    ))
+    fig_bank_compare.add_vline(x=int(retirement_age), line_dash="dot", line_color="#c9a65c")
+    fig_bank_compare.update_xaxes(title="Age")
+    st.plotly_chart(plot_layout(fig_bank_compare, height=420, y_label=f"Portfolio value ({CURRENCY})"), use_container_width=True)
+    st.caption(
+        f"Bank rate {bank_rate:.1f}% vs investing return {compare_investing_rate:.1f}% nominal annually; "
+        f"inflation {inflation:.1f}%. Both start with {money(compare_initial)} and save "
+        f"{money(retirement_contribution)} monthly until age {retirement_age}, then seek "
+        f"{money(target_income)} monthly in today's purchasing power through age {planning_age}. "
+        "Savings and withdrawals rise with inflation in nominal terms. "
+        "Constant returns, no fees/taxes or FX risk; bank rates may change and investments can lose value. "
+        "This comparison is illustrative, not a risk-adjusted recommendation."
+    )
+    if linked_result:
+        if linked_value is not None:
+            st.info(
+                f"Portfolio connection available: your current investment valuation is {money(linked_value)} "
+                f"at the latest available USD/{currency_choice[:3]} conversion. "
+                "Choose a portfolio starting-balance option above only if it doesn't double-count your retirement savings. "
+                f"Historical risk metrics cover {linked_coverage:.0%} of your portfolio."
+            )
+        else:
+            st.warning("The portfolio was analyzed, but no reliable currency conversion was available. "
+                       "Its USD value is not combined with retirement balances in another currency.")
+        if return_source.startswith("Historical"):
+            st.warning("You selected a historical return from the listed subset of your portfolio. "
+                       "It may not represent the whole portfolio or future returns; treat this as a stress scenario only.")
+    st.download_button(
+        "⬇ Download bank vs investing CSV",
+        data=comparison_result["annual"].to_csv(index=False).encode("utf-8-sig"),
+        file_name="bank_vs_investing_retirement.csv", mime="text/csv",
+    )
+
 # Existing loan + retirement combined PDF stays unchanged.
 report_data = generate_pdf_report(
     code=currency_choice.split(" ")[0],
@@ -1203,6 +1346,7 @@ report_data = generate_pdf_report(
     retirement_life_df=retirement_yearly,
     safe_spending=safe_spending,
     inflation_df=inflation_table,
+    bank_comparison=comparison_result,
 )
 with st.sidebar:
     st.divider()
@@ -1214,9 +1358,9 @@ with st.sidebar:
         mime="application/pdf",
         use_container_width=True,
     )
-    st.caption("Includes loan + retirement analyses. Download the separate multi-asset portfolio PDF inside Investments.")
+    st.caption("Includes mortgage, retirement, and bank vs investing comparisons. Download the separate portfolio PDF inside Investments.")
     st.divider()
-    st.caption("**Teacher demo:** open the project's TEACHER_GUIDE.md in Cursor for a short walkthrough and formulas.")
+    st.caption("Retirement assumptions and portfolio valuations are educational estimates, not guarantees.")
 
 with retirement_tab:
     st.markdown("#### Download your financial report")
@@ -1229,4 +1373,4 @@ with retirement_tab:
 
 
 st.divider()
-st.caption("Financial Future Planner · v5 Multi-Asset Edition · Educational estimates; not financial advice")
+st.caption("Financial Future Planner · v5.1 Linked Planning Edition · Educational estimates; not financial advice")

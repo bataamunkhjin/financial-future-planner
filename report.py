@@ -151,6 +151,7 @@ def generate_pdf_report(
     retirement_life_df: pd.DataFrame | None = None,
     safe_spending: dict | None = None,
     inflation_df: pd.DataFrame | None = None,
+    bank_comparison: dict | None = None,
 ) -> bytes:
     """Generate a small multi-page financial report from already-calculated app data."""
     code = code if code in {"USD", "MNT", "EUR"} else "CUR"
@@ -333,6 +334,35 @@ def generate_pdf_report(
             "Nominal future amounts rise with the assumed inflation rate; this does not mean "
             "a higher standard of living. No foreign exchange conversion is performed."
         )
+
+    if bank_comparison is not None:
+        story.append(PageBreak())
+        heading("06  |  Bank savings vs investing")
+        para("Both strategies use identical starting funds, monthly contributions, retirement date "
+             "and target monthly spending. The two strategies differ only by their assumed constant nominal returns.")
+        table(["Assumption", "Bank savings", "Investing"], [
+            ["Assumed nominal annual return", f'{bank_comparison["bank_rate_pct"]:.1f}%',
+             f'{bank_comparison["investing_rate_pct"]:.1f}%'],
+            ["Starting savings", _currency(bank_comparison["starting_balance"], code),
+             _currency(bank_comparison["starting_balance"], code)],
+            ["Portfolio at retirement (real)", _currency(bank_comparison["retirement_balances"]["Bank"], code),
+             _currency(bank_comparison["retirement_balances"]["Investing"], code)],
+            ["Portfolio at planning age (real)", _currency(bank_comparison["ending_balances"]["Bank"], code),
+             _currency(bank_comparison["ending_balances"]["Investing"], code)],
+            ["Total missed spending (real)", _currency(bank_comparison["shortfalls"]["Bank"], code),
+             _currency(bank_comparison["shortfalls"]["Investing"], code)],
+        ], [width*0.38, width*0.31, width*0.31])
+        annual = bank_comparison["annual"]
+        heading("Savings and retirement spending - today's purchasing power")
+        story.append(_line_chart([
+            ("Bank savings", annual["Age"].to_numpy(), annual["Bank real"].to_numpy(), BLUE),
+            ("Investing", annual["Age"].to_numpy(), annual["Investing real"].to_numpy(), TEAL),
+        ], width=width, height=150))
+        small("Assumes constant rates, inflation-adjusted deposits and withdrawals, "
+              "no taxes, fees, or changing deposit rates. The bank rate is illustrative, not a live offer; "
+              "investing returns are uncertain. If the starting value includes a live-priced portfolio, "
+              "the USD value was converted using an estimated exchange rate. Any historical portfolio "
+              "return used is a retrospective proxy for listed holdings, not a future prediction.")
 
     doc.build(story)
     return buf.getvalue()
