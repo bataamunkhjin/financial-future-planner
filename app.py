@@ -1,4 +1,4 @@
-"""Financial Future Planner — two-tab, offline mortgage and retirement tool.
+"""Financial Future Planner v5.5 — redesigned two-tab offline financial dashboard.
 
 Run: python -m streamlit run app.py
 """
@@ -47,68 +47,193 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Clean two-tab layout with spacious charts. */
-    :root {--ink:#142c41;--ocean:#047e8d;--mint:#16b59b;--edge:#dce8ed;}
-    html,body,[data-testid="stAppViewContainer"] {font-family: Inter, "Segoe UI", Arial, sans-serif;}
-    .block-container {max-width: 1380px; padding-top: 1.1rem; padding-bottom: 3rem;}
-    [data-testid="stAppViewContainer"] {background:linear-gradient(180deg,#f2f8fc 0%,#f9fbfd 36%,#fff 100%);}
-    section[data-testid="stSidebar"] {background:linear-gradient(180deg,#edf6f8,#f8fbfc);border-right:1px solid #dbe6eb;}
-    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {line-height:1.55;}
-    .block-container h4 {color:#17374f; padding-left:12px; border-left:4px solid #1a9f9e; margin-top:1.7rem; margin-bottom: .75rem;}
-    .block-container h3 {color:#102c43;}
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {border-color:#dce9ed !important;}
-    [data-testid="stPlotlyChart"] {background:#fff;border:1px solid #e1ebef;border-radius:16px;padding:8px 10px;box-shadow:0 6px 24px rgba(11,51,71,.035);}
-    [data-testid="stDataFrame"] {border-radius:12px;overflow:hidden;}
-    .insight-strip{background:#f0f8fa;border:1px solid #d7ebed;padding:13px 17px;border-radius:14px;color:#284658;margin:12px 0 18px;line-height:1.55;}
-    .section-kicker {font-size:.72rem;font-weight:800;letter-spacing:.11em;color:#168487;text-transform:uppercase;margin:10px 0 2px;}
-    .section-intro {font-size:.9rem;color:#627989;margin:0 0 16px;}
-    .chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0 0;}
-    .chip{border:1px solid rgba(255,255,255,.28);padding:5px 10px;border-radius:30px;font-size:.78rem;color:#e3fbf9;background:rgba(255,255,255,.11);}
-    .viz-label{font-size:1.02rem;font-weight:750;color:#1e465a;margin:16px 0 5px;}
-    /* Charts are given their own breathing space and no longer compete in narrow columns. */
-    [data-testid="stPlotlyChart"] {margin:12px 0 20px;}
-    [data-testid="stTabs"] [data-baseweb="tab-list"] {gap: 8px;}
-    [data-testid="stTabs"] button {border-radius:9px 9px 0 0;}
+    /* Financial Future Planner v5.5: minimalist, school-branded fintech UI. */
+    :root { --navy:#14283c; --navy-soft:#294052; --teal:#087f7a;
+            --mint:#16a394; --gold:#d5aa51; --muted:#6e8091;
+            --line:#e3eaf0; --canvas:#f5f7fa; --white:#ffffff; }
 
+    html, body, [data-testid="stAppViewContainer"],
+    [data-testid="stSidebar"] {font-family: Inter,"Segoe UI",Arial,sans-serif;}
+    [data-testid="stAppViewContainer"] {
+        background:var(--canvas); color:var(--navy);
+    }
+    .block-container {
+        max-width:1350px; padding-top:1.8rem; padding-bottom:4rem;
+        padding-left:3rem; padding-right:3rem;
+    }
+    [data-testid="stHeader"] {background:var(--canvas);}
+    [data-testid="stDecoration"] {display:none;}
+    #MainMenu {visibility:hidden;}
 
-    h1, h2, h3, h4 {letter-spacing: -.026em;}
+    /* A quieter, narrower sidebar with explicit grouping. */
+    section[data-testid="stSidebar"] {
+        background:#ffffff; border-right:1px solid var(--line);
+    }
+    section[data-testid="stSidebar"] > div {padding-top:1.15rem;}
+    section[data-testid="stSidebar"] h3 {
+        color:var(--navy); font-size:1.05rem;letter-spacing:-.02em;
+    }
+    section[data-testid="stSidebar"] p {
+        color:var(--muted);font-size:.80rem;line-height:1.55;
+    }
+    .sidebar-eyebrow {font-size:.72rem;letter-spacing:.12em;
+       text-transform:uppercase;color:var(--teal);font-weight:800;margin:2px 0 4px;}
+    .sidebar-divider {height:1px;background:var(--line);margin:22px 0;}
+    .sidebar-hint {background:#f3f8f7;border:1px solid #e0eeeb;
+       border-radius:12px;padding:12px 14px;font-size:.82rem;
+       color:#567078;line-height:1.55;}
+    section[data-testid="stSidebar"] [data-testid="stSelectbox"] {margin-top:12px;}
+
+    /* Compact branded masthead; not a marketing banner. */
     .planner-hero {
-        position:relative;overflow:hidden;
-        background: linear-gradient(113deg, #102c46 0%, #13516b 56%, #007e83 100%);
-        border-radius: 22px; padding: 30px 34px; color: #fff;
-        margin-bottom: 1.2rem; box-shadow: 0 15px 36px rgba(11,49,70,.16);
+        position:relative;background:#ffffff;border:1px solid #e2eaf0;
+        border-radius:20px;padding:23px 28px;margin:0 0 15px;
+        box-shadow:0 9px 30px rgba(22,43,68,.045);
+        overflow:hidden;
     }
-    .planner-hero::after {content:"";position:absolute;width:310px;height:310px;right:-125px;top:-165px;border:54px solid rgba(173,255,227,.075);border-radius:50%;pointer-events:none;}
-    .planner-hero h1 {color: #fff; margin: 0; font-size: 2.0rem; line-height: 1.25;}
-    .planner-hero p {color: #dcefeb; margin: 8px 0 0; font-size: .99rem;}
-    .planner-hero .hero-eyebrow {color: #99efe0; font-size: .89rem; letter-spacing: .05em; font-weight: 750; margin: 0 0 8px;}
-    .hero-header {display:flex;justify-content:space-between;align-items:center;gap:22px;position:relative;z-index:1;}
+    .planner-hero:before {
+        content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+        background:linear-gradient(180deg,#c99d3b,#0f968a);
+    }
+    .hero-header {display:flex;align-items:center;
+        justify-content:space-between;gap:28px;}
     .hero-copy {min-width:0;flex:1;}
-    .university-logo-wrap {background:#ffffff;padding:12px 15px;border-radius:14px;flex-shrink:0;box-shadow:0 5px 16px rgba(0,0,0,.10);}
-    .university-logo {width:min(290px,100%);height:auto;display:block;}
-    .hero-subtext {max-width:580px;}
-
-    [data-testid="stMetric"] {
-        background: #fff; padding: 16px; border-radius: 16px;
-        border: 1px solid #dce9eb; min-height: 116px;
-        box-shadow:0 6px 17px rgba(20,61,80,.04);
+    .planner-hero .hero-eyebrow {
+        margin:0 0 7px;color:var(--teal);font-weight:800;
+        font-size:.72rem;text-transform:uppercase;letter-spacing:.15em;
     }
-    [data-testid="stMetricValue"] {font-size: 1.53rem; letter-spacing: -.035em;color:#143749;}
-    [data-testid="stMetricLabel"] {color:#5d7888;font-weight:650;font-size:.88rem;}
-    [data-testid="stMetricLabel"] {line-height: 1.25;}
-    [data-testid="stTabs"] button[aria-selected="true"] {font-weight: 800;color:#007f87;border-bottom:3px solid #139d97;}
-    [data-testid="stTabs"] button {padding:12px 17px;font-weight:650;}
-    [data-testid="stExpander"] {border-radius: 12px;}
-    [data-testid="stMetricDelta"] {font-size: .9rem;}
-    .section-note {color:#586a74; font-size: .91rem;}
-    @media (max-width: 760px) {
-        .block-container {padding-top: .7rem;}
-        .planner-hero {padding: 23px;}
-        .chip-row {gap:5px;}
-        .planner-hero h1 {font-size: 1.5rem;}
-        .hero-header {flex-direction:column-reverse;align-items:flex-start;gap:15px;}
-        .university-logo {width:220px;}
-        [data-testid="stMetricValue"] {font-size: 1.22rem;}
+    .planner-hero h1 {color:var(--navy);margin:0;
+        font-size:clamp(1.55rem,2.1vw,2.0rem);line-height:1.19;
+        letter-spacing:-.045em;font-weight:820;
+    }
+    .planner-hero .hero-subtext {color:#718394;font-size:.88rem;
+        margin:8px 0 0;line-height:1.55;}
+    .university-logo-wrap {flex:0 0 225px;max-width:34%;
+        padding:0 0 0 24px;border-left:1px solid #e4eaf0;}
+    .university-logo {display:block;width:100%;height:auto;object-fit:contain;}
+    .masthead-note {display:flex;justify-content:space-between;flex-wrap:wrap;
+        color:#8492a1;font-size:.78rem;margin:0 0 24px;gap:8px;}
+    .masthead-note strong {color:var(--teal);font-weight:700;}
+    .page-eyebrow {color:var(--teal);text-transform:uppercase;
+        font-size:.70rem;letter-spacing:.14em;font-weight:850;
+        margin:14px 0 7px;}
+
+    /* Navigation should read like two distinct workspaces. */
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap:8px;border-bottom:1px solid var(--line);padding-bottom:1px;
+        margin-bottom:15px;
+    }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button {
+        border:1px solid transparent;border-radius:11px 11px 0 0;
+        padding:12px 20px;color:#66798b;font-weight:700;
+        font-size:.91rem;transition:background .2s ease;
+    }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button[aria-selected="true"] {
+        background:#ffffff;color:var(--navy);
+        border-color:var(--line);border-bottom:2px solid var(--teal);
+    }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button:hover {
+        color:var(--teal);background:#eef7f5;
+    }
+    /* Nested chart-view tabs are deliberately understated. */
+    [data-testid="stTabs"] [data-testid="stTabs"] [data-baseweb="tab-list"] button {
+        font-size:.81rem;padding:8px 14px;
+    }
+    .block-container h2 {color:var(--navy);font-size:1.54rem;
+        letter-spacing:-.035em;margin-bottom:.35rem;}
+    .block-container h3 {color:var(--navy);font-size:1.26rem;letter-spacing:-.025em;}
+    .block-container h4 {
+        color:var(--navy);font-size:1.12rem;letter-spacing:-.022em;
+        font-weight:750;padding:0;margin-top:2.15rem;margin-bottom:.65rem;
+        border:0;
+    }
+    .section-kicker {color:var(--teal);font-size:.70rem;
+        text-transform:uppercase;letter-spacing:.13em;font-weight:850;
+        margin:26px 0 1px;}
+    .viz-label {color:var(--navy-soft);font-size:.91rem;
+        font-weight:750;margin:18px 0 4px;}
+    .block-container [data-testid="stCaptionContainer"] p,
+    .block-container .stCaption p {font-size:.82rem;color:#8797a5;line-height:1.52;}
+
+    /* Inputs belong to one softly elevated editing panel. */
+    [data-testid="stVerticalBlockBorderWrapper"]:has(> div [data-testid="stTextInput"]) {
+        border-color:#e0e9f0 !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        border-color:var(--line) !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stTextInput"] input,
+    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stNumberInput"] input {
+        border-radius:9px;font-variant-numeric:tabular-nums;
+        font-size:.93rem;font-weight:650;
+    }
+    [data-testid="stTextInput"] input:focus,
+    [data-testid="stNumberInput"] input:focus {
+        border-color:var(--teal);box-shadow:0 0 0 2px rgba(22,163,148,.12);
+    }
+    [data-testid="stWidgetLabel"] label {font-size:.80rem;
+        color:#607387;font-weight:650;line-height:1.25;}
+    [data-testid="stSlider"] {padding-top:2px;}
+    [data-testid="stSlider"] [role="slider"] {background:var(--teal);border-color:var(--teal);}
+    [data-testid="stExpander"] {border:1px solid #e4ebf1;border-radius:10px;background:#fbfcfd;}
+    [data-testid="stExpander"] summary {font-size:.83rem;color:#607487;}
+
+    /* Native Streamlit metrics, without custom numbers or fake calculations. */
+    [data-testid="stMetric"] {
+        background:#ffffff;border:1px solid var(--line);
+        box-shadow:0 4px 14px rgba(15,40,63,.035);
+        border-radius:15px;padding:18px 16px 16px;
+        min-height:126px;position:relative;overflow:hidden;
+    }
+    [data-testid="stMetric"]:before {content:"";position:absolute;
+        left:0;top:0;right:0;height:3px;
+        background:linear-gradient(90deg,var(--teal),#74c8ba);
+        opacity:.8;}
+    [data-testid="stMetricLabel"] {color:#74869a;
+        font-size:.77rem;line-height:1.35;font-weight:680;}
+    [data-testid="stMetricValue"] {font-size:clamp(1.02rem,1.65vw,1.54rem);
+        color:var(--navy);letter-spacing:-.045em;font-weight:800;
+        font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+    [data-testid="stMetricDelta"] {font-size:.84rem;}
+
+    /* Full width charts, no competing frames or overlong legends. */
+    [data-testid="stPlotlyChart"] {
+        background:#ffffff;border:1px solid var(--line);
+        border-radius:16px;padding:10px 16px;
+        box-shadow:0 5px 18px rgba(21,43,62,.035);
+        margin:12px 0 24px;
+    }
+    [data-testid="stDataFrame"] {border:1px solid var(--line);
+        border-radius:14px;overflow:hidden;}
+    [data-testid="stAlert"] {border-radius:11px;}
+    [data-testid="stProgress"] {padding-top:3px;}
+    hr {border-color:var(--line)!important;margin:27px 0!important;}
+
+    /* Buttons and downloads: confident but not loud. */
+    [data-testid="stDownloadButton"] button[kind="secondary"],
+    [data-testid="stDownloadButton"] button {
+        border-radius:10px;font-size:.83rem;font-weight:700;
+        border-color:#d6e5e3;color:#087b76;
+        background:#f1faf8;min-height:40px;
+    }
+    [data-testid="stDownloadButton"] button:hover {
+        border-color:#0e9d90;background:#e6f6f2;color:#06615d;
+    }
+    [data-testid="stAlert"] [data-testid="stMarkdownContainer"] p {
+        font-size:.87rem;line-height:1.55;
+    }
+    @media (max-width:900px) {
+        .block-container {padding-left:1.4rem;padding-right:1.4rem;}
+        .university-logo-wrap {flex-basis:180px;max-width:37%;padding-left:18px;}
+    }
+    @media (max-width:640px) {
+        .block-container {padding-left:1rem;padding-right:1rem;padding-top:1rem;}
+        .planner-hero {padding:19px 18px;}
+        .hero-header {gap:12px;align-items:flex-start;}
+        .university-logo-wrap {flex-basis:120px;padding-left:12px;}
+        .planner-hero h1 {font-size:1.45rem;}
+        .planner-hero .hero-subtext {font-size:.80rem;}
+        [data-testid="stMetric"] {min-height:100px;padding:12px;}
     }
     </style>
     """,
@@ -116,7 +241,8 @@ st.markdown(
 )
 
 CURRENCIES = {"USD ($)": "$", "MNT (₮)": "₮", "EUR (€)": "€"}
-st.sidebar.header("⚙️ App settings")
+st.sidebar.markdown('<div class="sidebar-eyebrow">YOUR WORKSPACE</div>', unsafe_allow_html=True)
+st.sidebar.header("Preferences")
 currency_choice = st.sidebar.selectbox(
     "Currency / number labels",
     list(CURRENCIES),
@@ -209,19 +335,35 @@ def months_as_text(months: int) -> str:
 
 
 def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -> go.Figure:
+    """One coherent, readable figure style across both financial planners."""
     fig.update_layout(
+        template="plotly_white",
         height=height,
-        margin=dict(l=18, r=18, t=40, b=30),
+        margin=dict(l=22, r=26, t=52, b=32),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", y=1.13, x=0, font=dict(size=12)),
+        legend=dict(
+            orientation="h", y=1.15, x=0,
+            bgcolor="rgba(255,255,255,0)",
+            font=dict(size=11, color="#576c7e"),
+            itemclick="toggle", itemdoubleclick="toggleothers",
+        ),
         hovermode="x unified",
-        font=dict(family="Arial, sans-serif", size=12, color="#334e62"),
-        colorway=["#0d8f93", "#335e98", "#f29c56", "#8675bf", "#a4b8c7"],
-        hoverlabel=dict(bgcolor="#ffffff", font_size=12),
+        font=dict(family="Inter, Segoe UI, Arial, sans-serif", size=12, color="#566c80"),
+        colorway=["#0f938a", "#526e9d", "#dbaa52", "#8a81be", "#91a6b7"],
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#dbe5ec", font_size=12),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#e3eaf0", ticks="outside", tickcolor="#d5e1e7")
-    fig.update_yaxes(gridcolor="rgba(135,147,166,.14)", zeroline=False, title=y_label, separatethousands=True)
+    fig.update_xaxes(
+        showgrid=False, zeroline=False, linecolor="#e3e9ef",
+        ticks="outside", tickcolor="#cbd8e2",
+        title_font=dict(size=11, color="#738598"),
+    )
+    fig.update_yaxes(
+        gridcolor="rgba(128,148,164,.13)", zeroline=False,
+        title=y_label, separatethousands=True,
+        title_font=dict(size=11, color="#738598"),
+        tickfont=dict(color="#6e8394"),
+    )
     return fig
 
 
@@ -422,29 +564,28 @@ logo_markup = (
 hero_html = """<section class="planner-hero">
   <div class="hero-header">
     <div class="hero-copy">
-      <p class="hero-eyebrow">Munkhjin Bataa</p>
+      <p class="hero-eyebrow">Munkhjin Bataa · AUM</p>
       <h1>Financial Future Planner</h1>
-      <p class="hero-subtext">Understand borrowing costs. Plan your retirement with clarity.</p>
-      <div class="chip-row">
-        <span class="chip">🏠 Mortgage &amp; Loan</span>
-        <span class="chip">🌱 Retirement Planning</span>
-        <span class="chip">📄 PDF Reports</span>
-      </div>
+      <p class="hero-subtext">Make clearer decisions about borrowing and retirement.</p>
     </div>
     __SCHOOL_LOGO__
   </div>
 </section>"""
 st.markdown(hero_html.replace("__SCHOOL_LOGO__", logo_markup), unsafe_allow_html=True)
-st.caption("Two planners | 4 loan inputs + 5 retirement inputs | No external market data or account needed.")
-st.sidebar.caption("Figures are educational estimates, not personalized financial advice.")
-st.sidebar.caption("All calculations work offline. Currency selection changes labels, not exchange rates.")
+st.markdown(
+    '<div class="masthead-note"><span>PERSONAL FINANCE WORKSPACE</span>'
+    '<span>Mortgage planning &nbsp; · &nbsp; Retirement forecasting &nbsp; · &nbsp; <strong>Offline</strong></span></div>',
+    unsafe_allow_html=True,
+)
+st.sidebar.caption("Scenario planning without accounts or live market data.")
 
 loan_tab, retirement_tab = st.tabs(["🏠 Mortgage / Loan Planner", "🌱 Retirement Planner"])
 
 # ────────────────────────── LOAN TAB ──────────────────────────
 with loan_tab:
-    st.subheader("What will your loan really cost?")
-    st.caption("Four essential inputs. Monetary fields add commas after pressing Enter or clicking outside.")
+    st.markdown('<div class="page-eyebrow">01 / LOAN PLANNER</div>', unsafe_allow_html=True)
+    st.subheader("Know the cost of your loan")
+    st.caption("Four inputs. Change any number to instantly update the repayment analysis.")
 
     with st.container(border=True):
         # Align the four widget controls along one baseline even when
@@ -458,7 +599,7 @@ with loan_tab:
             )
         with b:
             interest_rate = st.number_input(
-                "Annual interest rate (%)", min_value=0.0, max_value=50.0,
+                "Interest rate (%)", min_value=0.0, max_value=50.0,
                 value=16.0 if IS_MNT else 6.5, step=0.25, format="%.2f",
             )
         with c:
@@ -495,7 +636,7 @@ with loan_tab:
     saved_interest = max(0.0, standard_stats["interest"] - chosen_stats["interest"])
     months_saved = standard_stats["months"] - chosen_stats["months"]
 
-    st.markdown("#### Loan snapshot")
+    st.markdown("#### Your loan at a glance")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Scheduled monthly P&I", money(scheduled_payment, 2))
     m2.metric("Total interest · standard", money(standard_stats["interest"]))
@@ -525,14 +666,14 @@ with loan_tab:
     allocation = go.Figure()
     allocation.add_trace(go.Bar(
         y=["Cost allocation"], x=[loan_amount], orientation="h",
-        name="Original principal", marker_color="#078f96",
+        name="Original principal", marker_color="#0f938a",
         text=f"Principal {principal_share:.1%}", textposition="inside",
         insidetextanchor="middle",
         hovertemplate=f"Original principal: {CURRENCY}{loan_amount:,.2f}<extra></extra>",
     ))
     allocation.add_trace(go.Bar(
         y=["Cost allocation"], x=[chosen_stats["interest"]], orientation="h",
-        name="Loan interest", marker_color="#f2a36b",
+        name="Loan interest", marker_color="#dbaa52",
         text=f"Interest {interest_share:.1%}" if interest_share >= 0.12 else "",
         textposition="inside", insidetextanchor="middle",
         hovertemplate=f"Total interest: {CURRENCY}{chosen_stats['interest']:,.2f}<extra></extra>",
@@ -554,12 +695,12 @@ with loan_tab:
     fig_interest = go.Figure()
     fig_interest.add_trace(go.Scatter(
         x=[0] + standard["Month"].tolist(), y=[0] + standard["Cumulative Interest"].tolist(),
-        name="Standard loan", mode="lines", line=dict(color="#8295a8", width=3),
+        name="Standard loan", mode="lines", line=dict(color="#8d9eaf", width=3),
         hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>",
     ))
     fig_interest.add_trace(go.Scatter(
         x=[0] + chosen["Month"].tolist(), y=[0] + chosen["Cumulative Interest"].tolist(),
-        name="With extra payments", mode="lines", line=dict(color="#0d9b92", width=3),
+        name="With extra payments", mode="lines", line=dict(color="#0b9588", width=3),
         hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>",
     ))
     fig_interest.update_xaxes(title="Months from loan start")
@@ -577,13 +718,13 @@ with loan_tab:
         fig.add_trace(go.Scatter(
             x=[0] + standard["Month"].tolist(),
             y=[loan_amount] + standard["Ending Balance"].tolist(),
-            mode="lines", line=dict(color="#64748b", width=3),
+            mode="lines", line=dict(color="#8795a7", width=3),
             name="Standard payment",
         ))
         fig.add_trace(go.Scatter(
             x=[0] + chosen["Month"].tolist(),
             y=[loan_amount] + chosen["Ending Balance"].tolist(),
-            mode="lines", line=dict(color="#10b981", width=3),
+            mode="lines", line=dict(color="#13a08f", width=3),
             name="With extra payment",
         ))
         fig.update_xaxes(title="Months since loan start")
@@ -591,8 +732,8 @@ with loan_tab:
     with payment_mix_tab:
         annual = standard.groupby("Year", as_index=False)[["Principal", "Interest"]].sum()
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=annual["Year"], y=annual["Principal"], name="Principal", marker_color="#10b981"))
-        fig.add_trace(go.Bar(x=annual["Year"], y=annual["Interest"], name="Interest", marker_color="#f59e0b"))
+        fig.add_trace(go.Bar(x=annual["Year"], y=annual["Principal"], name="Principal", marker_color="#13a08f"))
+        fig.add_trace(go.Bar(x=annual["Year"], y=annual["Interest"], name="Interest", marker_color="#d9a454"))
         fig.update_layout(barmode="stack")
         fig.update_xaxes(title="Loan year")
         st.plotly_chart(plot_layout(fig, height=360, y_label=f"Annual payment ({CURRENCY})"), use_container_width=True)
@@ -615,7 +756,7 @@ with loan_tab:
     st.markdown('<div class="viz-label">Interest saved under different extra-payment strategies</div>', unsafe_allow_html=True)
     fig_extra = go.Figure(go.Bar(
         x=extra_scenarios["Scenario"], y=extra_scenarios["Interest Saved"],
-        marker=dict(color=["#b1c2cb" if i == 0 else "#16a2a0" for i in range(len(extra_scenarios))],
+        marker=dict(color=["#b1c2cb" if i == 0 else "#109a8b" for i in range(len(extra_scenarios))],
                     line=dict(width=0)),
         text=[money(v) for v in extra_scenarios["Interest Saved"]], textposition="outside",
         hovertemplate="%{x}<br>Interest saved: %{y:,.0f}<extra></extra>",
@@ -639,7 +780,7 @@ with loan_tab:
     fig_rates = go.Figure(go.Scatter(
         x=rate_scenarios["Rate (%)"], y=rate_scenarios["Monthly P&I"],
         name="Monthly payment", mode="lines+markers",
-        line=dict(color="#0f8f99", width=3), marker=dict(size=10,color="#0f8f99",line=dict(color="#fff",width=2)),
+        line=dict(color="#0f938a", width=3), marker=dict(size=10,color="#0f938a",line=dict(color="#fff",width=2)),
         hovertemplate="Rate: %{x:.2f}%<br>Payment: %{y:,.2f}<extra></extra>",
     ))
     fig_rates.update_xaxes(title="Hypothetical annual interest rate (%)")
@@ -714,11 +855,12 @@ with loan_tab:
 
 # ─────────────────────── RETIREMENT TAB ───────────────────────
 with retirement_tab:
-    st.subheader("Will your savings support retirement?")
-    st.caption("Five essential inputs. Monetary fields add commas after pressing Enter or clicking outside; all values are in today's purchasing power.")
+    st.markdown('<div class="page-eyebrow">02 / RETIREMENT PLANNER</div>', unsafe_allow_html=True)
+    st.subheader("Build your retirement plan")
+    st.caption("Five inputs. All retirement amounts are expressed in today's purchasing power.")
 
     with st.container(border=True):
-        c1, c2, c3, c4, c5 = st.columns(5, vertical_alignment="bottom")
+        c1, c2, c3 = st.columns([1, 1, 1.55], vertical_alignment="bottom")
         with c1:
             current_age = st.number_input("Current age", min_value=18, max_value=80, value=25, step=1)
         with c2:
@@ -729,6 +871,7 @@ with retirement_tab:
                 min_value=0.0, max_value=10_000_000_000_000.0,
                 default=30_000_000.0 if IS_MNT else 10_000.0,
             )
+        c4, c5 = st.columns(2, vertical_alignment="bottom")
         with c4:
             retirement_contribution = money_input(
                 f"Monthly savings ({CURRENCY})", name="retirement_contribution",
@@ -847,7 +990,7 @@ with retirement_tab:
             "That is a model estimate, not a guarantee; living to age 100 is not predicted."
         )
 
-    st.markdown("#### Retirement snapshot")
+    st.markdown("#### Retirement outlook")
     r1, r2, r3, r4 = st.columns(4)
     r1.metric("Portfolio at retirement · real", money(planned_balance))
     r2.metric(f"Portfolio needed through age {planning_age}", money(portfolio_target))
@@ -881,12 +1024,12 @@ with retirement_tab:
     fig_build = go.Figure()
     fig_build.add_trace(go.Scatter(
         x=before_retirement["Age"], y=before_retirement["Deposits including starting savings"],
-        name="Your deposits + starting savings", mode="lines", line=dict(color="#91a5b8",width=3),
+        name="Your deposits + starting savings", mode="lines", line=dict(color="#91a3b5",width=3),
         hovertemplate="Age %{x}: %{y:,.0f}<extra></extra>"
     ))
     fig_build.add_trace(go.Scatter(
         x=before_retirement["Age"], y=before_retirement["Balance (today's money)"],
-        name="Total projected portfolio", mode="lines", line=dict(color="#098f96",width=4),
+        name="Total projected portfolio", mode="lines", line=dict(color="#0f938a",width=4),
         hovertemplate="Age %{x}: %{y:,.0f}<extra></extra>"
     ))
     fig_build.update_xaxes(title="Age before retirement")
@@ -1173,7 +1316,7 @@ with loan_tab:
     ))
     fig.add_trace(go.Scatter(
         x=wealth["Month"], y=wealth["Prepay Strategy Net Wealth"],
-        name="Prepay, then invest", line=dict(color="#10b981", width=3)
+        name="Prepay, then invest", line=dict(color="#13a08f", width=3)
     ))
     fig.update_xaxes(title="Months from loan start")
     st.plotly_chart(
@@ -1264,7 +1407,7 @@ report_data = generate_pdf_report(
 )
 with st.sidebar:
     st.divider()
-    st.subheader("📄 Financial report")
+    st.subheader("Your report")
     st.download_button(
         "⬇ Download combined PDF",
         data=report_data,
@@ -1272,9 +1415,9 @@ with st.sidebar:
         mime="application/pdf",
         use_container_width=True,
     )
-    st.caption("Includes your loan and retirement results, scenarios, and inflation analysis.")
+    st.caption("Both plans, key charts, and scenario results in one PDF.")
     st.divider()
-    st.caption("Retirement return and inflation assumptions are educational estimates, not guarantees.")
+    st.caption("Scenario forecasts are estimates, not guarantees.")
 
 with retirement_tab:
     st.markdown("#### Download your financial report")
