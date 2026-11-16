@@ -1,4 +1,4 @@
-"""Financial Future Planner v5.6 — cohesive soft-dark, two-tab offline financial dashboard.
+"""Financial Future Planner v5.7 — clean scrolling and compact AUM branding.
 
 Run: python -m streamlit run app.py
 """
@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal, InvalidOperation
+import inspect
 import re
 
 import pandas as pd
@@ -103,9 +104,17 @@ st.markdown(
       line-height:1.20;letter-spacing:-.035em;font-weight:800;}
     .planner-hero .hero-subtext {color:#BBCAD8;font-size:.87rem;
       margin:10px 0 0;line-height:1.5;}
-    .university-logo-wrap {flex:0 0 225px;max-width:35%;padding:12px 15px;
-      border-radius:11px;background:#F8FAFC;}
-    .university-logo {display:block;width:100%;height:auto;object-fit:contain;}
+    /* Compact university identity: colored AUM crest, no oversized white plaque. */
+    .university-logo-wrap {display:flex;align-items:center;justify-content:flex-end;
+      gap:10px;flex:0 1 auto;max-width:40%;min-width:0;padding:0;background:transparent;}
+    .university-crest {display:flex;align-items:center;justify-content:center;
+      flex:0 0 48px;width:48px;height:56px;padding:3px;
+      background:#E9EFF7;border:1px solid #D1DCE7;border-radius:12px;}
+    .university-logo {display:block;width:40px;height:50px;object-fit:contain;}
+    .university-wordmark {color:#F0F5FA;font-size:.78rem;font-weight:750;
+      letter-spacing:.018em;line-height:1.45;white-space:nowrap;}
+    .university-wordmark small {display:block;color:#E5BA69;
+      font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;}
     .masthead-note {display:flex;justify-content:space-between;flex-wrap:wrap;
       color:var(--muted);font-size:.78rem;margin:0 0 24px;gap:8px;}
     .masthead-note strong {color:var(--teal);font-weight:700;}
@@ -185,10 +194,17 @@ st.markdown(
     [data-testid="stMetricDelta"] {font-size:.84rem;}
 
     /* Clean chart canvases. No heavy extra frames or mismatched surfaces. */
-    [data-testid="stPlotlyChart"] {background:var(--white);
-      border:1px solid var(--line);border-radius:15px;
-      padding:10px 14px;margin:12px 0 22px;
+    /* No constrained chart viewport: keep ONE page scroll rather than
+       a nested scrollbar inside every Plotly chart. */
+    [data-testid="stPlotlyChart"] {
+      background:var(--white);border:1px solid var(--line);
+      border-radius:15px;box-sizing:border-box;
+      padding:0!important;margin:12px 0 22px;
+      overflow:visible!important;max-height:none!important;height:auto!important;
       box-shadow:0 5px 15px rgba(0,0,0,.07);
+    }
+    [data-testid="stPlotlyChart"] > div {
+      max-height:none!important;overflow:visible!important;
     }
     [data-testid="stDataFrame"] {border:1px solid var(--line);border-radius:12px;overflow:hidden;}
     [data-testid="stAlert"] {border-radius:11px;}
@@ -206,13 +222,17 @@ st.markdown(
     }
     @media (max-width:900px) {
       .block-container {padding-left:1.4rem;padding-right:1.4rem;}
-      .university-logo-wrap {flex-basis:175px;max-width:37%;}
+      .university-logo-wrap {max-width:45%;}
+      .university-wordmark {font-size:.70rem;}
     }
     @media (max-width:640px) {
       .block-container {padding:1rem 1rem 3rem;}
       .planner-hero {padding:18px 17px;}
       .hero-header {gap:12px;align-items:flex-start;}
-      .university-logo-wrap {flex-basis:114px;max-width:35%;padding:7px;}
+      .university-logo-wrap {max-width:52px;}
+      .university-crest {width:43px;height:51px;flex-basis:43px;}
+      .university-logo {width:36px;height:46px;}
+      .university-wordmark {display:none;}
       .planner-hero h1 {font-size:1.42rem;}
       .planner-hero .hero-subtext {font-size:.78rem;}
       [data-testid="stMetric"] {min-height:104px;padding:12px;}
@@ -322,7 +342,8 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
     fig.update_layout(
         template="plotly_dark",
         height=height,
-        margin=dict(l=22, r=26, t=52, b=32),
+        margin=dict(l=36, r=30, t=57 if height >= 220 else 38,
+                    b=60 if height >= 220 else 20),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(
@@ -348,6 +369,54 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
         tickfont=dict(color="#AAC0D2"),
     )
     return fig
+
+
+def render_chart(fig: go.Figure, **kwargs) -> None:
+    """Render Plotly responsively without a second (inner) vertical scrollbar.
+
+    On newer Streamlit versions ``height='content'`` sizes the widget to
+    its figure; older versions default to figure height. We support both.
+    """
+    kwargs.pop("use_container_width", None)
+    kwargs.pop("height", None)
+    try:
+        supports_content_height = "height" in inspect.signature(st.plotly_chart).parameters
+    except (TypeError, ValueError):
+        supports_content_height = False
+    chart_options = dict(config={"scrollZoom": False, "displaylogo": False,
+                                 "responsive": True}, theme=None)
+    if supports_content_height:
+        st.plotly_chart(fig, width="stretch", height="content", **chart_options, **kwargs)
+    else:
+        st.plotly_chart(fig, use_container_width=True, **chart_options, **kwargs)
+
+
+def paged_table(data: pd.DataFrame, *, key: str, formats: dict | None = None,
+                page_size: int = 10) -> None:
+    """Show long results page-by-page so tables don't create another scrollbar.
+
+    CSV buttons elsewhere still export the complete underlying dataset.
+    """
+    total = len(data)
+    if total > page_size:
+        ranges = [(a, min(a + page_size, total)) for a in range(0, total, page_size)]
+        captions = [f"Rows {start + 1}–{end} of {total}" for start, end in ranges]
+        choice = st.selectbox("Table rows", captions, key=f"{key}_page",
+                              label_visibility="collapsed")
+        selected = captions.index(choice)
+        start, end = ranges[selected]
+        visible = data.iloc[start:end]
+    else:
+        visible = data
+    presented = visible.style.format(formats) if formats else visible
+    try:
+        content_height = "height" in inspect.signature(st.dataframe).parameters
+    except (TypeError, ValueError):
+        content_height = False
+    # Streamlit >=1.53 supports content height. Legacy versions get enough
+    # room for the ten visible rows, without a tall fixed-height viewport.
+    height = "content" if content_height else (38 * (len(visible) + 1) + 20)
+    st.dataframe(presented, use_container_width=True, hide_index=True, height=height)
 
 
 # The user-provided American University of Mongolia logo is embedded locally so
@@ -538,10 +607,17 @@ AUM_LOGO_BASE64 = (
     "sPIs1M9/JBPNdyQTTYdASI2Gf3Qq0fSQHirN4/i+zwGfAx+JA9tdoU9dYBVy1BdShdzwwz4HfA5sKwf+oQJrWxvn4/sc8Dngc6CQ"
     "A/8fAAD//7pPfEsAAAAGSURBVAMA9KTIDRyFPtkAAAAASUVORK5CYII="
 )
+# The header uses the crest from the exact user-supplied university logo.
+# The full original remains embedded above; neither requires an external image.
+AUM_CREST_BASE64 = "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"
 logo_markup = (
-    '<div class="university-logo-wrap"><img class="university-logo" '
-    f'src="data:image/png;base64,{AUM_LOGO_BASE64}" '
-    'alt="American University of Mongolia logo"></div>'
+    '<div class="university-logo-wrap">'
+    '<span class="university-crest"><img class="university-logo" '
+    f'src="data:image/png;base64,{AUM_CREST_BASE64}" '
+    'alt="American University of Mongolia logo"></span>'
+    '<span class="university-wordmark">American University'
+    '<small>of Mongolia</small></span>'
+    '</div>'
 )
 
 hero_html = """<section class="planner-hero">
@@ -557,7 +633,7 @@ hero_html = """<section class="planner-hero">
 st.markdown(hero_html.replace("__SCHOOL_LOGO__", logo_markup), unsafe_allow_html=True)
 st.markdown(
     '<div class="masthead-note"><span>PERSONAL FINANCE WORKSPACE</span>'
-    '<span>Mortgage planning &nbsp; · &nbsp; Retirement forecasting &nbsp; · &nbsp; <strong>Offline</strong></span></div>',
+    '<span>Mortgage planning &nbsp; · &nbsp; Retirement forecasting</span></div>',
     unsafe_allow_html=True,
 )
 st.sidebar.caption("Scenario planning without accounts or live market data.")
@@ -665,7 +741,7 @@ with loan_tab:
                              uniformtext_minsize=11, uniformtext_mode="hide")
     allocation.update_xaxes(visible=False, range=[0, loan_total * 1.02] if loan_total > 0 else None)
     allocation.update_yaxes(visible=False, fixedrange=True)
-    st.plotly_chart(plot_layout(allocation, height=170), use_container_width=True)
+    render_chart(plot_layout(allocation, height=170), use_container_width=True)
     st.caption(
         f"Total repaid with extra payments: **{money(chosen_stats['paid'])}** · "
         f"Original principal: **{money(loan_amount)}** · "
@@ -687,7 +763,7 @@ with loan_tab:
         hovertemplate="Month %{x}: %{y:,.0f}<extra></extra>",
     ))
     fig_interest.update_xaxes(title="Months from loan start")
-    st.plotly_chart(
+    render_chart(
         plot_layout(fig_interest, height=365, y_label=f"Interest paid ({CURRENCY})"),
         use_container_width=True,
     )
@@ -711,7 +787,7 @@ with loan_tab:
             name="With extra payment",
         ))
         fig.update_xaxes(title="Months since loan start")
-        st.plotly_chart(plot_layout(fig, height=360, y_label=f"Balance ({CURRENCY})"), use_container_width=True)
+        render_chart(plot_layout(fig, height=360, y_label=f"Balance ({CURRENCY})"), use_container_width=True)
     with payment_mix_tab:
         annual = standard.groupby("Year", as_index=False)[["Principal", "Interest"]].sum()
         fig = go.Figure()
@@ -719,7 +795,7 @@ with loan_tab:
         fig.add_trace(go.Bar(x=annual["Year"], y=annual["Interest"], name="Interest", marker_color="#d9a454"))
         fig.update_layout(barmode="stack")
         fig.update_xaxes(title="Loan year")
-        st.plotly_chart(plot_layout(fig, height=360, y_label=f"Annual payment ({CURRENCY})"), use_container_width=True)
+        render_chart(plot_layout(fig, height=360, y_label=f"Annual payment ({CURRENCY})"), use_container_width=True)
 
     st.markdown("#### Automatic extra-payment scenarios")
     extra_scenarios = annual_loan_scenario(
@@ -745,7 +821,7 @@ with loan_tab:
         hovertemplate="%{x}<br>Interest saved: %{y:,.0f}<extra></extra>",
     ))
     fig_extra.update_layout(showlegend=False)
-    st.plotly_chart(plot_layout(fig_extra, height=305, y_label=f"Interest saved ({CURRENCY})"), use_container_width=True)
+    render_chart(plot_layout(fig_extra, height=305, y_label=f"Interest saved ({CURRENCY})"), use_container_width=True)
 
     st.markdown("#### What if interest rates were different?")
     rate_scenarios = loan_rate_scenarios(
@@ -767,7 +843,7 @@ with loan_tab:
         hovertemplate="Rate: %{x:.2f}%<br>Payment: %{y:,.2f}<extra></extra>",
     ))
     fig_rates.update_xaxes(title="Hypothetical annual interest rate (%)")
-    st.plotly_chart(plot_layout(fig_rates, height=275, y_label=f"Monthly principal & interest ({CURRENCY})"),use_container_width=True)
+    render_chart(plot_layout(fig_rates, height=275, y_label=f"Monthly principal & interest ({CURRENCY})"),use_container_width=True)
     st.caption(
         "Rate scenarios are hypothetical quotes for a *new* fixed-rate loan. "
         "Existing fixed-rate mortgages do not automatically reprice when interest rates change. "
@@ -821,13 +897,10 @@ with loan_tab:
     st.markdown("#### Monthly amortization schedule")
     display_schedule = chosen.copy()
     display_schedule["Payment Date"] = display_schedule["Payment Date"].astype(str)
-    st.dataframe(
-        display_schedule.style.format({
-            col: "{:,.2f}" for col in display_schedule.select_dtypes(include="number").columns if col not in ("Month", "Year")
-        }),
-        use_container_width=True,
-        hide_index=True,
-        height=350,
+    paged_table(
+        display_schedule, key="amortization_table",
+        formats={col: "{:,.2f}" for col in display_schedule.select_dtypes(include="number").columns
+                 if col not in ("Month", "Year")},
     )
     st.download_button(
         "⬇ Download loan amortization CSV",
@@ -1016,7 +1089,7 @@ with retirement_tab:
         hovertemplate="Age %{x}: %{y:,.0f}<extra></extra>"
     ))
     fig_build.update_xaxes(title="Age before retirement")
-    st.plotly_chart(plot_layout(fig_build, height=340, y_label=f"Value ({CURRENCY}, today's money)"), use_container_width=True)
+    render_chart(plot_layout(fig_build, height=340, y_label=f"Value ({CURRENCY}, today's money)"), use_container_width=True)
 
     st.markdown("#### Savings goal for 80% modeled spending success")
     with st.container(border=True):
@@ -1059,20 +1132,20 @@ with retirement_tab:
         hovertemplate="Age %{x}: %{y:,.0f}<extra></extra>",
     ))
     fig_life.update_xaxes(title="Age during retirement")
-    st.plotly_chart(
+    render_chart(
         plot_layout(fig_life, height=355, y_label=f"Remaining portfolio ({CURRENCY}, today's money)"),
         use_container_width=True,
     )
     st.markdown("**Yearly retirement cash flow**")
     show_life = retirement_yearly.copy()
-    st.dataframe(
-        show_life.style.format({
+    paged_table(
+        show_life, key="annual_withdrawals_table",
+        formats={
             "Starting Balance": "{:,.0f}", "Investment Growth": "{:,.0f}",
             "Planned Spending": "{:,.0f}", "Actual Withdrawals": "{:,.0f}",
             "Unfunded Spending": "{:,.0f}", "Ending Balance": "{:,.0f}",
             "Cumulative Withdrawals": "{:,.0f}",
-        }),
-        use_container_width=True, hide_index=True, height=300,
+        },
     )
     st.markdown("**Annual investment growth versus withdrawals**")
     cashflow_fig = go.Figure()
@@ -1089,7 +1162,7 @@ with retirement_tab:
     ))
     cashflow_fig.update_layout(barmode="relative")
     cashflow_fig.update_xaxes(title="Age at end of retirement year")
-    st.plotly_chart(plot_layout(cashflow_fig,height=350,y_label=f"Annual portfolio cash flow ({CURRENCY})"),use_container_width=True)
+    render_chart(plot_layout(cashflow_fig,height=350,y_label=f"Annual portfolio cash flow ({CURRENCY})"),use_container_width=True)
     st.caption("Withdrawals are shown below zero to distinguish cash leaving the portfolio. Returns continue after retirement, including years with investment losses.")
 
     d1, d2 = st.columns(2)
@@ -1129,7 +1202,7 @@ with retirement_tab:
             name="Future nominal cost", line=dict(color="#d47b37", width=3),
         ))
         fig_inflation.update_xaxes(title="Age")
-        st.plotly_chart(plot_layout(fig_inflation, height=365, y_label=f"Monthly spending ({CURRENCY})"), use_container_width=True)
+        render_chart(plot_layout(fig_inflation, height=365, y_label=f"Monthly spending ({CURRENCY})"), use_container_width=True)
     with portfolio_tab:
         fig_power = go.Figure()
         fig_power.add_trace(go.Scatter(
@@ -1141,7 +1214,7 @@ with retirement_tab:
             name="Portfolio · nominal", line=dict(color="#3a70a2", width=3),
         ))
         fig_power.update_xaxes(title="Age")
-        st.plotly_chart(plot_layout(fig_power, height=365, y_label=f"Projected portfolio ({CURRENCY})"), use_container_width=True)
+        render_chart(plot_layout(fig_power, height=365, y_label=f"Projected portfolio ({CURRENCY})"), use_container_width=True)
     with st.expander("See inflation-adjusted values by age"):
         money_cols = [col for col in inflation_table if "Portfolio - " in col or "Monthly Spending - " in col]
         fmt = {name: "{:,.0f}" for name in money_cols}
@@ -1220,15 +1293,13 @@ with retirement_tab:
             st.info(line)
 
     st.markdown("#### Year-by-year balance projection")
-    st.dataframe(
-        projection.style.format({
+    paged_table(
+        projection, key="retirement_projection_table",
+        formats={
             "Balance (today's money)": "{:,.2f}",
             "Cumulative Contributions": "{:,.2f}",
             "Cumulative Withdrawals": "{:,.2f}",
-        }),
-        use_container_width=True,
-        hide_index=True,
-        height=350,
+        },
     )
     z1, z2 = st.columns(2)
     with z1:
@@ -1302,7 +1373,7 @@ with loan_tab:
         name="Prepay, then invest", line=dict(color="#13a08f", width=3)
     ))
     fig.update_xaxes(title="Months from loan start")
-    st.plotly_chart(
+    render_chart(
         plot_layout(fig, height=380, y_label=f"Net financial wealth ({CURRENCY})"),
         use_container_width=True,
     )
@@ -1329,7 +1400,7 @@ with loan_tab:
         hovertemplate="%{x}<br>Invest minus prepay: %{y:,.0f}<extra></extra>",
     ))
     difference_plot.add_hline(y=0,line_color="#8395a7",line_width=1)
-    st.plotly_chart(plot_layout(difference_plot,height=280,y_label=f"Invest − prepay ({CURRENCY})"),use_container_width=True)
+    render_chart(plot_layout(difference_plot,height=280,y_label=f"Invest − prepay ({CURRENCY})"),use_container_width=True)
     st.caption(
         "Each row assumes a DIFFERENT constant investment return, not a predicted probability. "
         "The 'Loan return break-even' row uses the fixed mortgage's effective annual borrowing rate. "
@@ -1338,10 +1409,11 @@ with loan_tab:
     for insight in investment_insights:
         st.info(insight)
     with st.expander("See month-by-month mortgage vs. investing results"):
-        st.dataframe(wealth.style.format({
-            col: "{:,.2f}" for col in wealth.select_dtypes(include="number").columns
-            if col != "Month"
-        }), hide_index=True, use_container_width=True, height=300)
+        paged_table(
+            wealth, key="wealth_strategy_table",
+            formats={col: "{:,.2f}" for col in wealth.select_dtypes(include="number").columns
+                     if col != "Month"},
+        )
         st.download_button(
             "⬇ Download strategy comparison CSV",
             wealth.to_csv(index=False).encode("utf-8-sig"),
