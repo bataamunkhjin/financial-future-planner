@@ -1,4 +1,4 @@
-"""Financial Future Planner v5.5 — redesigned two-tab offline financial dashboard.
+"""Financial Future Planner v5.6 — cohesive soft-dark, two-tab offline financial dashboard.
 
 Run: python -m streamlit run app.py
 """
@@ -46,233 +46,179 @@ st.set_page_config(
 
 st.markdown(
     """
-    <style>
-    /* Financial Future Planner v5.5: minimalist, school-branded fintech UI. */
-    :root { --navy:#edf3fa; --navy-soft:#d2e0ed; --teal:#38d6c3;
-            --mint:#29bda7; --gold:#d5aa51; --muted:#9ab0c3;
-            --line:#2b3b50; --canvas:#0b1220; --white:#142236; }
 
+    <style>
+    /* v5.6 soft-dark redesign: ONE coherent theme, not layered light/dark overrides. */
+    :root {
+      --navy:#F0F5FA; --navy-soft:#D4E2ED; --teal:#45D3C3;
+      --mint:#31B9A8; --gold:#E5BA69; --muted:#A6B8C8;
+      --line:#334458; --canvas:#111B29; --white:#1D2C40;
+      --sidebar:#162233; --elevated:#213249; --soft:#19283A;
+    }
     html, body, [data-testid="stAppViewContainer"],
-    [data-testid="stSidebar"] {font-family: Inter,"Segoe UI",Arial,sans-serif;}
-    [data-testid="stAppViewContainer"] {
-        background:var(--canvas); color:var(--navy);
+    [data-testid="stSidebar"] {font-family:Inter,"Segoe UI",Arial,sans-serif;}
+    html,body,[data-testid="stAppViewContainer"],.stApp {
+      background:var(--canvas)!important;color:var(--navy);
     }
-    .block-container {
-        max-width:1350px; padding-top:1.8rem; padding-bottom:4rem;
-        padding-left:3rem; padding-right:3rem;
+    .block-container {max-width:1350px;padding:1.8rem 3rem 4rem;}
+    [data-testid="stHeader"], [data-testid="stToolbar"] {
+      background:var(--canvas)!important;
     }
-    [data-testid="stHeader"] {background:var(--canvas);}
     [data-testid="stDecoration"] {display:none;}
     #MainMenu {visibility:hidden;}
-
-    /* A quieter, narrower sidebar with explicit grouping. */
+    
+    /* Sidebar */
     section[data-testid="stSidebar"] {
-        background:#ffffff; border-right:1px solid var(--line);
+      background:var(--sidebar)!important;
+      border-right:1px solid var(--line);
     }
     section[data-testid="stSidebar"] > div {padding-top:1.15rem;}
-    section[data-testid="stSidebar"] h3 {
-        color:var(--navy); font-size:1.05rem;letter-spacing:-.02em;
+    section[data-testid="stSidebar"] h3 {color:var(--navy);font-size:1.04rem;letter-spacing:-.02em;}
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+      color:var(--muted);font-size:.83rem;line-height:1.55;
     }
-    section[data-testid="stSidebar"] p {
-        color:var(--muted);font-size:.80rem;line-height:1.55;
-    }
-    .sidebar-eyebrow {font-size:.72rem;letter-spacing:.12em;
-       text-transform:uppercase;color:var(--teal);font-weight:800;margin:2px 0 4px;}
-    .sidebar-divider {height:1px;background:var(--line);margin:22px 0;}
-    .sidebar-hint {background:#f3f8f7;border:1px solid #e0eeeb;
-       border-radius:12px;padding:12px 14px;font-size:.82rem;
-       color:#567078;line-height:1.55;}
+    .sidebar-eyebrow {font-size:.70rem;letter-spacing:.14em;
+      text-transform:uppercase;color:var(--teal);font-weight:800;margin:2px 0 4px;}
+    .sidebar-divider {height:1px;background:var(--line);margin:20px 0;}
+    .sidebar-hint {background:var(--soft);border:1px solid var(--line);
+      color:var(--muted);border-radius:12px;padding:12px 14px;
+      font-size:.82rem;line-height:1.5;}
     section[data-testid="stSidebar"] [data-testid="stSelectbox"] {margin-top:12px;}
 
-    /* Compact branded masthead; not a marketing banner. */
+    /* Header: compact and calm, with a dedicated bright logo background. */
     .planner-hero {
-        position:relative;background:#ffffff;border:1px solid #e2eaf0;
-        border-radius:20px;padding:23px 28px;margin:0 0 15px;
-        box-shadow:0 9px 30px rgba(22,43,68,.045);
-        overflow:hidden;
+      position:relative;background:linear-gradient(115deg,#1B2B3E 0%,#1E3445 100%);
+      border:1px solid #344B60;border-radius:18px;
+      padding:24px 27px;margin:0 0 15px;
+      box-shadow:0 12px 25px rgba(0,0,0,.10);overflow:hidden;
     }
-    .planner-hero:before {
-        content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
-        background:linear-gradient(180deg,#c99d3b,#0f968a);
-    }
-    .hero-header {display:flex;align-items:center;
-        justify-content:space-between;gap:28px;}
+    .planner-hero:before {content:"";position:absolute;left:0;top:0;bottom:0;
+      width:4px;background:linear-gradient(180deg,var(--gold),var(--teal));}
+    .hero-header {display:flex;align-items:center;justify-content:space-between;gap:28px;}
     .hero-copy {min-width:0;flex:1;}
-    .planner-hero .hero-eyebrow {
-        margin:0 0 7px;color:var(--teal);font-weight:800;
-        font-size:.72rem;text-transform:uppercase;letter-spacing:.15em;
-    }
-    .planner-hero h1 {color:var(--navy);margin:0;
-        font-size:clamp(1.55rem,2.1vw,2.0rem);line-height:1.19;
-        letter-spacing:-.045em;font-weight:820;
-    }
-    .planner-hero .hero-subtext {color:#718394;font-size:.88rem;
-        margin:8px 0 0;line-height:1.55;}
-    .university-logo-wrap {flex:0 0 225px;max-width:34%;
-        padding:0 0 0 24px;border-left:1px solid #e4eaf0;}
+    .planner-hero .hero-eyebrow {margin:0 0 8px;color:var(--teal);
+      font-weight:800;font-size:.71rem;text-transform:uppercase;letter-spacing:.13em;}
+    .planner-hero h1 {color:var(--navy);margin:0;font-size:clamp(1.55rem,2.1vw,2rem);
+      line-height:1.20;letter-spacing:-.035em;font-weight:800;}
+    .planner-hero .hero-subtext {color:#BBCAD8;font-size:.87rem;
+      margin:10px 0 0;line-height:1.5;}
+    .university-logo-wrap {flex:0 0 225px;max-width:35%;padding:12px 15px;
+      border-radius:11px;background:#F8FAFC;}
     .university-logo {display:block;width:100%;height:auto;object-fit:contain;}
     .masthead-note {display:flex;justify-content:space-between;flex-wrap:wrap;
-        color:#8492a1;font-size:.78rem;margin:0 0 24px;gap:8px;}
+      color:var(--muted);font-size:.78rem;margin:0 0 24px;gap:8px;}
     .masthead-note strong {color:var(--teal);font-weight:700;}
-    .page-eyebrow {color:var(--teal);text-transform:uppercase;
-        font-size:.70rem;letter-spacing:.14em;font-weight:850;
-        margin:14px 0 7px;}
+    .page-eyebrow,.section-kicker {color:var(--teal);text-transform:uppercase;
+      font-size:.70rem;letter-spacing:.13em;font-weight:800;}
+    .page-eyebrow {margin:13px 0 7px;} .section-kicker {margin:26px 0 1px;}
+    .viz-label {color:var(--navy-soft);font-size:.92rem;font-weight:700;margin:18px 0 6px;}
 
-    /* Navigation should read like two distinct workspaces. */
+    /* Tabs */
     [data-testid="stTabs"] [data-baseweb="tab-list"] {
-        gap:8px;border-bottom:1px solid var(--line);padding-bottom:1px;
-        margin-bottom:15px;
+      gap:8px;border-bottom:1px solid var(--line);padding-bottom:1px;margin-bottom:17px;
     }
     [data-testid="stTabs"] [data-baseweb="tab-list"] button {
-        border:1px solid transparent;border-radius:11px 11px 0 0;
-        padding:12px 20px;color:#66798b;font-weight:700;
-        font-size:.91rem;transition:background .2s ease;
+      border:1px solid transparent;border-radius:10px 10px 0 0;
+      padding:12px 19px;color:var(--muted);font-weight:690;
+      font-size:.91rem;transition:background .15s ease;
     }
     [data-testid="stTabs"] [data-baseweb="tab-list"] button[aria-selected="true"] {
-        background:#ffffff;color:var(--navy);
-        border-color:var(--line);border-bottom:2px solid var(--teal);
+      background:var(--elevated);color:var(--navy);
+      border-color:var(--line);border-bottom:2px solid var(--teal);
     }
     [data-testid="stTabs"] [data-baseweb="tab-list"] button:hover {
-        color:var(--teal);background:#eef7f5;
+      color:var(--teal);background:var(--soft);
     }
-    /* Nested chart-view tabs are deliberately understated. */
     [data-testid="stTabs"] [data-testid="stTabs"] [data-baseweb="tab-list"] button {
-        font-size:.81rem;padding:8px 14px;
+      font-size:.81rem;padding:8px 14px;
     }
+    
+    /* Labels and typography: avoid dark-on-dark text. */
     .block-container h2 {color:var(--navy);font-size:1.54rem;
-        letter-spacing:-.035em;margin-bottom:.35rem;}
-    .block-container h3 {color:var(--navy);font-size:1.26rem;letter-spacing:-.025em;}
-    .block-container h4 {
-        color:var(--navy);font-size:1.12rem;letter-spacing:-.022em;
-        font-weight:750;padding:0;margin-top:2.15rem;margin-bottom:.65rem;
-        border:0;
-    }
-    .section-kicker {color:var(--teal);font-size:.70rem;
-        text-transform:uppercase;letter-spacing:.13em;font-weight:850;
-        margin:26px 0 1px;}
-    .viz-label {color:var(--navy-soft);font-size:.91rem;
-        font-weight:750;margin:18px 0 4px;}
+      letter-spacing:-.028em;margin-bottom:.35rem;}
+    .block-container h3 {color:var(--navy);font-size:1.26rem;letter-spacing:-.024em;}
+    .block-container h4 {color:var(--navy);font-size:1.12rem;
+      font-weight:730;letter-spacing:-.02em;margin:2.1rem 0 .65rem;border:0;padding:0;}
     .block-container [data-testid="stCaptionContainer"] p,
-    .block-container .stCaption p {font-size:.82rem;color:#8797a5;line-height:1.52;}
+    .block-container .stCaption p {font-size:.82rem;color:var(--muted);line-height:1.52;}
+    [data-testid="stWidgetLabel"] label {font-size:.82rem;color:#D4E1EB;
+      font-weight:650;line-height:1.27;}
 
-    /* Inputs belong to one softly elevated editing panel. */
-    [data-testid="stVerticalBlockBorderWrapper"]:has(> div [data-testid="stTextInput"]) {
-        border-color:#e0e9f0 !important;
+    /* Let Streamlit's DARK native theme handle control internals.
+       Only unify backgrounds, borders, and focus outlines. */
+    [data-testid="stVerticalBlockBorderWrapper"] > div {
+      border-color:var(--line)!important;
     }
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        border-color:var(--line) !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stTextInput"] input,
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stNumberInput"] input {
-        border-radius:9px;font-variant-numeric:tabular-nums;
-        font-size:.93rem;font-weight:650;
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input {
+      font-variant-numeric:tabular-nums;font-size:.94rem;font-weight:650;
+      color:var(--navy)!important;
     }
     [data-testid="stTextInput"] input:focus,
     [data-testid="stNumberInput"] input:focus {
-        border-color:var(--teal);box-shadow:0 0 0 2px rgba(22,163,148,.12);
+      box-shadow:0 0 0 2px rgba(69,211,195,.18);
     }
-    [data-testid="stWidgetLabel"] label {font-size:.80rem;
-        color:#607387;font-weight:650;line-height:1.25;}
     [data-testid="stSlider"] {padding-top:2px;}
-    [data-testid="stSlider"] [role="slider"] {background:var(--teal);border-color:var(--teal);}
-    [data-testid="stExpander"] {border:1px solid #e4ebf1;border-radius:10px;background:#fbfcfd;}
-    [data-testid="stExpander"] summary {font-size:.83rem;color:#607487;}
+    [data-testid="stSlider"] [role="slider"] {
+      background:var(--teal);border-color:var(--teal);
+    }
+    [data-testid="stExpander"] {border:1px solid var(--line);
+      border-radius:11px;background:var(--soft);}
+    [data-testid="stExpander"] summary {font-size:.84rem;color:var(--navy-soft);}
 
-    /* Native Streamlit metrics, without custom numbers or fake calculations. */
+    /* Metric cards use ONE subtle surface and consistent height. */
     [data-testid="stMetric"] {
-        background:#ffffff;border:1px solid var(--line);
-        box-shadow:0 4px 14px rgba(15,40,63,.035);
-        border-radius:15px;padding:18px 16px 16px;
-        min-height:126px;position:relative;overflow:hidden;
+      background:var(--white);border:1px solid var(--line);
+      box-shadow:0 5px 17px rgba(0,0,0,.08);
+      border-radius:14px;padding:18px 16px 16px;
+      min-height:126px;position:relative;overflow:hidden;
     }
     [data-testid="stMetric"]:before {content:"";position:absolute;
-        left:0;top:0;right:0;height:3px;
-        background:linear-gradient(90deg,var(--teal),#74c8ba);
-        opacity:.8;}
-    [data-testid="stMetricLabel"] {color:#74869a;
-        font-size:.77rem;line-height:1.35;font-weight:680;}
-    [data-testid="stMetricValue"] {font-size:clamp(1.02rem,1.65vw,1.54rem);
-        color:var(--navy);letter-spacing:-.045em;font-weight:800;
-        font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+      top:0;left:0;right:0;height:3px;
+      background:linear-gradient(90deg,var(--teal),#77B6AD);}
+    [data-testid="stMetricLabel"] {color:#B9CBD9;font-size:.78rem;
+      line-height:1.35;font-weight:680;}
+    [data-testid="stMetricValue"] {font-size:clamp(1.02rem,1.6vw,1.52rem);
+      color:var(--navy);letter-spacing:-.03em;font-weight:790;
+      font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
     [data-testid="stMetricDelta"] {font-size:.84rem;}
 
-    /* Full width charts, no competing frames or overlong legends. */
-    [data-testid="stPlotlyChart"] {
-        background:#ffffff;border:1px solid var(--line);
-        border-radius:16px;padding:10px 16px;
-        box-shadow:0 5px 18px rgba(21,43,62,.035);
-        margin:12px 0 24px;
+    /* Clean chart canvases. No heavy extra frames or mismatched surfaces. */
+    [data-testid="stPlotlyChart"] {background:var(--white);
+      border:1px solid var(--line);border-radius:15px;
+      padding:10px 14px;margin:12px 0 22px;
+      box-shadow:0 5px 15px rgba(0,0,0,.07);
     }
-    [data-testid="stDataFrame"] {border:1px solid var(--line);
-        border-radius:14px;overflow:hidden;}
+    [data-testid="stDataFrame"] {border:1px solid var(--line);border-radius:12px;overflow:hidden;}
     [data-testid="stAlert"] {border-radius:11px;}
-    [data-testid="stProgress"] {padding-top:3px;}
-    hr {border-color:var(--line)!important;margin:27px 0!important;}
-
-    /* Buttons and downloads: confident but not loud. */
-    [data-testid="stDownloadButton"] button[kind="secondary"],
+    hr {border-color:var(--line)!important;margin:25px 0!important;}
     [data-testid="stDownloadButton"] button {
-        border-radius:10px;font-size:.83rem;font-weight:700;
-        border-color:#d6e5e3;color:#087b76;
-        background:#f1faf8;min-height:40px;
+      border-radius:10px;font-size:.83rem;font-weight:700;
+      border:1px solid #287B73;color:#7DE6D8;
+      background:#173C40;min-height:40px;
     }
     [data-testid="stDownloadButton"] button:hover {
-        border-color:#0e9d90;background:#e6f6f2;color:#06615d;
+      border-color:var(--teal);background:#1C4C4D;color:#D5FFFA;
     }
     [data-testid="stAlert"] [data-testid="stMarkdownContainer"] p {
-        font-size:.87rem;line-height:1.55;
+      font-size:.87rem;line-height:1.55;
     }
     @media (max-width:900px) {
-        .block-container {padding-left:1.4rem;padding-right:1.4rem;}
-        .university-logo-wrap {flex-basis:180px;max-width:37%;padding-left:18px;}
+      .block-container {padding-left:1.4rem;padding-right:1.4rem;}
+      .university-logo-wrap {flex-basis:175px;max-width:37%;}
     }
     @media (max-width:640px) {
-        .block-container {padding-left:1rem;padding-right:1rem;padding-top:1rem;}
-        .planner-hero {padding:19px 18px;}
-        .hero-header {gap:12px;align-items:flex-start;}
-        .university-logo-wrap {flex-basis:120px;padding-left:12px;}
-        .planner-hero h1 {font-size:1.45rem;}
-        .planner-hero .hero-subtext {font-size:.80rem;}
-        [data-testid="stMetric"] {min-height:100px;padding:12px;}
+      .block-container {padding:1rem 1rem 3rem;}
+      .planner-hero {padding:18px 17px;}
+      .hero-header {gap:12px;align-items:flex-start;}
+      .university-logo-wrap {flex-basis:114px;max-width:35%;padding:7px;}
+      .planner-hero h1 {font-size:1.42rem;}
+      .planner-hero .hero-subtext {font-size:.78rem;}
+      [data-testid="stMetric"] {min-height:104px;padding:12px;}
     }
-
-    /* Dark edition overrides: preserve existing layouts and calculations. */
-    section[data-testid="stSidebar"] {background:#101b2b !important; border-right:1px solid var(--line);}
-    section[data-testid="stSidebar"] h3 {color:#edf3fa;}
-    section[data-testid="stSidebar"] p {color:#a4b5c7;}
-    .sidebar-hint {background:#142639;border-color:#2b4054;color:#b9cbd8;}
-    .planner-hero {background:#142236;border-color:#293f55;
-        box-shadow:0 14px 34px rgba(0,0,0,.20);}
-    .planner-hero .hero-subtext,.masthead-note {color:#aebfd0;}
-    /* Keep the original AUM logo legible; its lettering is dark blue. */
-    .university-logo-wrap {background:#f8fafc;border:0;border-radius:12px;
-        padding:13px 16px;max-width:36%;}
-    [data-testid="stTabs"] [data-baseweb="tab-list"] button {color:#b1c0d0;}
-    [data-testid="stTabs"] [data-baseweb="tab-list"] button[aria-selected="true"] {
-        background:#1b2c40;color:#f0f7fc;border-color:#2b3b50;
-        border-bottom:2px solid var(--teal);}
-    [data-testid="stTabs"] [data-baseweb="tab-list"] button:hover {
-        background:#1a3043;color:#55e6d4;}
-    .block-container [data-testid="stCaptionContainer"] p,
-    .block-container .stCaption p {color:#a3b5c6;}
-    [data-testid="stVerticalBlockBorderWrapper"]:has(> div [data-testid="stTextInput"]) {
-        border-color:#2b3b50 !important;}
-    [data-testid="stWidgetLabel"] label,
-    [data-testid="stMetricLabel"] {color:#adbed0;}
-    [data-testid="stExpander"] {background:#142236;border-color:#2b3b50;}
-    [data-testid="stExpander"] summary {color:#c4d5e3;}
-    [data-testid="stMetric"] {background:#142236;border-color:#2b3b50;
-        box-shadow:0 9px 18px rgba(0,0,0,.16);}
-    [data-testid="stMetricValue"] {color:#f0f6fb;}
-    [data-testid="stPlotlyChart"] {background:#142236;border-color:#2b3b50;
-        box-shadow:0 9px 18px rgba(0,0,0,.14);}
-    [data-testid="stDataFrame"] {border-color:#2b3b50;}
-    [data-testid="stDownloadButton"] button[kind="secondary"],
-    [data-testid="stDownloadButton"] button {
-        color:#65e3d1;background:#14332f;border-color:#265b58;}
-    [data-testid="stDownloadButton"] button:hover {
-        color:#a4fff4;background:#184640;border-color:#4cd8c7;}
     </style>
+
     """,
     unsafe_allow_html=True,
 )
@@ -382,24 +328,24 @@ def plot_layout(fig: go.Figure, height: int = 350, y_label: str | None = None) -
         legend=dict(
             orientation="h", y=1.15, x=0,
             bgcolor="rgba(0,0,0,0)",
-            font=dict(size=11, color="#bed0df"),
+            font=dict(size=11, color="#CBDCE8"),
             itemclick="toggle", itemdoubleclick="toggleothers",
         ),
         hovermode="x unified",
-        font=dict(family="Inter, Segoe UI, Arial, sans-serif", size=12, color="#d2e0ed"),
-        colorway=["#0f938a", "#526e9d", "#dbaa52", "#8a81be", "#91a6b7"],
-        hoverlabel=dict(bgcolor="#162a3e", bordercolor="#315062", font_size=12),
+        font=dict(family="Inter, Segoe UI, Arial, sans-serif", size=12, color="#D4E2ED"),
+        colorway=["#45D3C3", "#87A9E2", "#E5BA69", "#B3A0E5", "#A7C2D2"],
+        hoverlabel=dict(bgcolor="#22354B", bordercolor="#44586F", font_size=12),
     )
     fig.update_xaxes(
-        showgrid=False, zeroline=False, linecolor="#314458",
-        ticks="outside", tickcolor="#536b83",
-        title_font=dict(size=11, color="#a6bbcd"),
+        showgrid=False, zeroline=False, linecolor="#384B5F",
+        ticks="outside", tickcolor="#7E98AB",
+        title_font=dict(size=11, color="#AAC0D2"),
     )
     fig.update_yaxes(
         gridcolor="rgba(128,148,164,.13)", zeroline=False,
         title=y_label, separatethousands=True,
-        title_font=dict(size=11, color="#a6bbcd"),
-        tickfont=dict(color="#a6bbcd"),
+        title_font=dict(size=11, color="#AAC0D2"),
+        tickfont=dict(color="#AAC0D2"),
     )
     return fig
 
