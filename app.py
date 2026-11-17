@@ -1,7 +1,7 @@
-"""Financial Future Planner v6.5 — accessible, readable typography.
+"""Financial Future Planner v7.0 — smarter charts, growing savings, clearer reports.
 
-Two planners and all financial computations are retained from v6.4.
-Currency labels do not convert money. All projections are hypothetical.
+Two planners retain their core functionality. Currency labels are not FX conversions.
+All simulations and forecasts are hypothetical educational illustrations.
 """
 from __future__ import annotations
 
@@ -325,31 +325,38 @@ with loan_tab:
         ("Paid off by",chosen_stats["payoff_date"].strftime("%b %Y"),"Assuming no missed payments"),
         ("Time saved",months_as_text(months_saved),"With your extra payments"),
     ])
-    section("See the difference extra payments make","The lower line means less outstanding debt.")
-    loan_bal=go.Figure()
-    for df,name,col in [(standard,"Standard repayment","#557FA8"),(chosen,"With extra payments","#167C75")]:
-        loan_bal.add_trace(go.Scatter(x=[0]+df["Month"].tolist(),
-              y=[loan_amount]+df["Ending Balance"].tolist(),name=name,
-              line=dict(color=col,width=3),mode="lines"))
-    chart(loan_bal,x_label="Months since loan began",y_label=f"Remaining loan ({CURRENCY})",height=380)
-    st.caption(f"Your extra payment saves {money(saved_interest)} and moves payoff forward by {months_as_text(months_saved)}. "
-               "Fixed rate, no fees or prepayment penalties are assumed.")
-    with st.expander("Understand the cost: principal, interest, and repayment history"):
-        st.caption("Principal is the borrowed amount. Interest is the price paid to borrow it.")
-        allocation=go.Figure()
-        allocation.add_trace(go.Bar(y=["Loan cost"],x=[loan_amount],name="Principal",
-                                    orientation="h",marker_color="#167C75"))
-        allocation.add_trace(go.Bar(y=["Loan cost"],x=[chosen_stats["interest"]],name="Interest",
-                                    orientation="h",marker_color="#B77C38"))
+    section("See the cost of borrowing", "Choose one chart to understand how extra payments change your loan.")
+    loan_view = st.selectbox("Show loan chart", [
+        "Remaining balance", "Interest over time", "Principal and interest breakdown"
+    ], key="loan_main_chart")
+    if loan_view == "Remaining balance":
+        loan_fig = go.Figure()
+        for df, name, col in [(standard, "Standard repayment", "#557FA8"),
+                              (chosen, "With extra payments", "#167C75")]:
+            loan_fig.add_trace(go.Scatter(x=[0] + df["Month"].tolist(),
+                y=[loan_amount] + df["Ending Balance"].tolist(), name=name,
+                line=dict(color=col, width=3), mode="lines"))
+        chart(loan_fig, x_label="Months since loan began", y_label=f"Balance ({CURRENCY})", height=375)
+        st.caption(f"With extra payments, your payoff is {months_as_text(months_saved)} earlier and you save "
+                   f"{money(saved_interest)} in interest. The lower line indicates less remaining debt.")
+    elif loan_view == "Interest over time":
+        interest_fig = go.Figure()
+        for df, name, col in [(standard, "Standard repayment", "#557FA8"),
+                              (chosen, "With extra payments", "#167C75")]:
+            interest_fig.add_trace(go.Scatter(x=df["Month"], y=df["Interest"].cumsum(),
+                name=name, line=dict(color=col, width=3)))
+        chart(interest_fig, x_label="Months since loan began", y_label=f"Total interest paid ({CURRENCY})", height=375)
+        st.caption("The gap between the lines is the interest avoided by paying down principal sooner.")
+    else:
+        allocation = go.Figure()
+        allocation.add_trace(go.Bar(y=["Total paid"], x=[loan_amount],
+             name="Principal", orientation="h", marker_color="#167C75"))
+        allocation.add_trace(go.Bar(y=["Total paid"], x=[chosen_stats["interest"]],
+             name="Interest", orientation="h", marker_color="#B77C38"))
         allocation.update_layout(barmode="stack")
-        chart(allocation,x_label=f"Total repayment ({CURRENCY})",height=240)
-        interest_chart=go.Figure()
-        for df,name,col in [(standard,"Standard","#557FA8"),(chosen,"With extras","#167C75")]:
-            interest_chart.add_trace(go.Scatter(x=df["Month"],y=df["Interest"].cumsum(),
-                                      name=name,line=dict(color=col,width=3)))
-        chart(interest_chart,x_label="Month",y_label=f"Cumulative interest ({CURRENCY})",height=340)
-        st.caption("Total cash paid with extras: "+money(chosen_stats["paid"])+". "
-                   "If your extra payment is zero, both loan lines overlap.")
+        chart(allocation, x_label=f"Total repayment ({CURRENCY})", height=250)
+        st.caption(f"Principal is the amount borrowed ({money(loan_amount)}). The remaining "
+                   f"{money(chosen_stats['interest'])} is interest paid with the extra-payment strategy.")
 
     extra_scenarios=annual_loan_scenario(loan_amount,interest_rate,loan_years,extra_monthly,loan_start)
     rate_scenarios=loan_rate_scenarios(loan_amount,interest_rate,loan_years,extra_monthly,loan_start)
@@ -397,7 +404,7 @@ with loan_tab:
 
 # ====================== RETIREMENT PLANNER ======================
 with retirement_tab:
-    section("Set your retirement goal","Five simple inputs. Balances and spending are measured in today's purchasing power.")
+    section("Set your retirement goal","Five main inputs. Savings and spending are shown in today's purchasing power.")
     with st.container(border=True):
         a,b=st.columns(2,gap="large")
         with a:
@@ -444,30 +451,44 @@ with retirement_tab:
             with q6:
                 simulations=st.selectbox("Monte Carlo scenarios",options=[250,500,1000,2000],index=2,
                     help="Number of hypothetical investment futures generated.")
+            annual_savings_increase=st.number_input(
+                "Annual savings increase (% above inflation)", min_value=0.0, max_value=20.0,
+                value=0.0, step=0.5, format="%.1f", key=f"annual_savings_growth_{CURRENCY_CODE}",
+                help="Optional: raise your monthly savings once per year in today's money. "
+                     "For example, 3% means a real 3% increase above inflation. "
+                     "0% keeps the previous constant purchasing-power savings model.")
 
     months_to_retire=(int(retirement_age)-int(current_age))*12
     real_rate=real_monthly_return(expected_return,inflation)
-    planned_balance=grow_savings(retirement_savings,retirement_contribution,months_to_retire,real_rate)
+    planned_balance=grow_savings(retirement_savings,retirement_contribution,months_to_retire,real_rate,
+                                annual_savings_increase)
+    flat_savings_balance=grow_savings(retirement_savings,retirement_contribution,months_to_retire,real_rate)
+    last_year_contribution=retirement_contribution * (1 + annual_savings_increase/100) ** max(
+        0, int(retirement_age)-int(current_age)-1)
     retirement_months=(int(planning_age)-int(retirement_age))*12
     portfolio_target=drawdown_portfolio_requirement(target_income,retirement_months,real_rate)
     difference=planned_balance-portfolio_target
-    needed_per_month=required_monthly_contribution(retirement_savings,months_to_retire,portfolio_target,real_rate)
+    needed_per_month=required_monthly_contribution(retirement_savings,months_to_retire,portfolio_target,real_rate,
+                                                  annual_savings_increase)
     supported_income=(planned_balance / drawdown_portfolio_requirement(1.,retirement_months,real_rate))
     feasible_retirement=earliest_feasible_retirement_age(int(current_age),int(planning_age),retirement_savings,
-                                retirement_contribution,target_income,real_rate)
+                                retirement_contribution,target_income,real_rate,annual_savings_increase)
     earliest_age=feasible_retirement["age"] if feasible_retirement else None
     retirement_scenarios=retirement_what_if_scenarios(int(current_age),int(retirement_age),int(planning_age),
              retirement_savings,retirement_contribution,target_income,expected_return,inflation,
-             bank_deposit_pct=bank_deposit_rate)
+             bank_deposit_pct=bank_deposit_rate,annual_contribution_growth_pct=annual_savings_increase)
     projection,depletion_age=retirement_projection(int(current_age),int(retirement_age),int(planning_age),
-             retirement_savings,retirement_contribution,target_income,expected_return,inflation)
+             retirement_savings,retirement_contribution,target_income,expected_return,inflation,
+             annual_contribution_growth_pct=annual_savings_increase)
     simulation=monte_carlo_projection(int(current_age),int(retirement_age),int(planning_age),
              retirement_savings,retirement_contribution,target_income,expected_return,
-             inflation,volatility,portfolio_target,simulations=int(simulations),seed=42)
+             inflation,volatility,portfolio_target,simulations=int(simulations),seed=42,
+             annual_contribution_growth_pct=annual_savings_increase)
     fan=simulation["fan"]
     savings_goal_80=simulated_lifetime_savings_goal(int(current_age),int(retirement_age),int(planning_age),
              retirement_savings,retirement_contribution,target_income,expected_return,inflation,
-             volatility,simulations=int(simulations),target_probability=.80,seed=42)
+             volatility,simulations=int(simulations),target_probability=.80,seed=42,
+             annual_contribution_growth_pct=annual_savings_increase)
     retirement_monthly,retirement_yearly=retirement_life_schedule(planned_balance,int(retirement_age),
              int(planning_age),target_income,expected_return,inflation)
     inflation_table=inflation_purchasing_power(projection,int(current_age),target_income,inflation)
@@ -493,38 +514,60 @@ with retirement_tab:
     st.progress(min(1.,max(0.,funded_share)),text=f"{funded_share:.0%} of steady-return savings target")
     st.caption("This progress bar is not a probability. The success rate above comes from Monte Carlo simulations.")
 
-    section("Your savings over time","Savings grow before retirement, then support monthly withdrawals. Returns continue after retirement.")
-    balance_fig=go.Figure()
-    balance_fig.add_trace(go.Scatter(x=projection["Age"],y=projection["Balance (today's money)"],
-         name="Expected balance (steady returns)",line=dict(color="#167C75",width=3),
-         fill="tozeroy",fillcolor="rgba(22,124,117,.09)"))
-    balance_fig.add_vline(x=int(retirement_age),line_color="#B77C38",line_dash="dot",line_width=2)
-    chart(balance_fig,x_label="Your age",y_label=f"Balance ({CURRENCY}, today's money)",height=365)
-    st.caption(f"The dotted line marks retirement at age {retirement_age}. Savings and spending are assumed to rise with inflation in nominal terms.")
-
-    section("What if investment returns vary?","Monte Carlo estimates a range of possible outcomes instead of assuming perfect steady growth.")
-    st.markdown(f"**{simulation['sustain_probability']:.1%}** of {int(simulations):,} simulated outcomes fund every planned "
-                f"monthly withdrawal through age {planning_age}. This is a model result, not a guarantee.")
-    show_middle=st.checkbox("Also show the middle 50% of simulations",value=False,
-                 help="Adds a narrower 25th–75th percentile band to the chart.")
-    mc_fig=go.Figure()
-    mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P10"],line=dict(width=0),
-                    name="Lower 10% boundary",showlegend=False,hoverinfo="skip"))
-    mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P90"],line=dict(width=0),
-                    fill="tonexty",fillcolor="rgba(85,127,168,.16)",name="10th–90th percentile range"))
-    if show_middle:
-        mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P25"],line=dict(width=0),
-                    showlegend=False,hoverinfo="skip"))
-        mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P75"],line=dict(width=0),
-                    fill="tonexty",fillcolor="rgba(22,124,117,.17)",name="Middle 50% range"))
-    mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["Median"],line=dict(color="#167C75",width=3),
-                    name="Typical simulated outcome"))
-    mc_fig.add_trace(go.Scatter(x=projection["Age"],y=projection["Balance (today's money)"],
-                    line=dict(color="#B77C38",dash="dash",width=2),name="Steady-return estimate"))
-    mc_fig.add_vline(x=int(retirement_age),line_dash="dot",line_color="#8A9EA9")
-    chart(mc_fig,x_label="Your age",y_label=f"Portfolio ({CURRENCY}, today's money)",height=400)
-    st.caption("The shaded area covers the 10th to 90th percentile at each age. The green line is the median. "
-               "The dashed gold line assumes a fixed return every year. Simulations assume fixed inflation and independent annual returns.")
+    if annual_savings_increase > 0:
+        st.info(f"Your monthly savings rise by {annual_savings_increase:.1f}% above inflation each year: "
+                f"from {money(retirement_contribution)} today to about {money(last_year_contribution)} "
+                f"per month in your last year before retirement. This adds approximately "
+                f"{money(max(0.,planned_balance-flat_savings_balance))} at retirement versus a flat real contribution.")
+    section("Explore your retirement outlook", "Switch between three views. One clear chart at a time.")
+    retirement_chart_view=st.selectbox("Show retirement chart", [
+        "Portfolio balance", "Monte Carlo uncertainty", "Deposits and investment growth"
+    ], key="retirement_main_chart")
+    if retirement_chart_view=="Portfolio balance":
+        balance_fig=go.Figure()
+        balance_fig.add_trace(go.Scatter(x=projection["Age"],y=projection["Balance (today's money)"],
+             name="Steady-return balance",line=dict(color="#167C75",width=3),
+             fill="tozeroy",fillcolor="rgba(22,124,117,.09)"))
+        balance_fig.add_vline(x=int(retirement_age),line_color="#B77C38",line_dash="dot",line_width=2)
+        chart(balance_fig,x_label="Your age",y_label=f"Balance ({CURRENCY}, today's money)",height=380)
+        st.caption(f"Dotted line: retirement at age {retirement_age}. Deposits stop then, while "
+                   "investments continue earning modeled returns and fund monthly withdrawals.")
+    elif retirement_chart_view=="Monte Carlo uncertainty":
+        st.markdown(f"**{simulation['sustain_probability']:.1%}** of {int(simulations):,} simulated paths fund all "
+                    f"monthly withdrawals through age {planning_age}. This is not a guarantee.")
+        show_middle=st.checkbox("Show the middle 50% range",value=False,
+                               help="Displays the 25th to 75th percentile band as an additional shaded region.")
+        mc_fig=go.Figure()
+        mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P10"],line=dict(width=0),
+                                  name="Lower 10% boundary",showlegend=False,hoverinfo="skip"))
+        mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P90"],line=dict(width=0),
+                                  fill="tonexty",fillcolor="rgba(85,127,168,.16)",name="10th–90th percentile range"))
+        if show_middle:
+            mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P25"],line=dict(width=0),
+                                      showlegend=False,hoverinfo="skip"))
+            mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P75"],line=dict(width=0),
+                                      fill="tonexty",fillcolor="rgba(22,124,117,.17)",name="Middle 50% range"))
+        mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["Median"],line=dict(color="#167C75",width=3),
+                                  name="Typical simulated outcome"))
+        mc_fig.add_trace(go.Scatter(x=projection["Age"],y=projection["Balance (today's money)"],
+                                  line=dict(color="#B77C38",dash="dash",width=2),name="Steady-return estimate"))
+        mc_fig.add_vline(x=int(retirement_age),line_dash="dot",line_color="#8A9EA9")
+        chart(mc_fig,x_label="Your age",y_label=f"Portfolio ({CURRENCY}, today's money)",height=425)
+        st.caption("Shaded area: 10th–90th percentile at each age. Green line: median outcome. "
+                   "Gold dashed line: fixed annual return. Simulations assume constant inflation and independent annual returns.")
+    else:
+        savings_build=projection[projection["Age"]<=int(retirement_age)].copy()
+        savings_build["Starting savings + deposits"]=(retirement_savings+savings_build["Cumulative Contributions"])
+        growth_fig=go.Figure()
+        growth_fig.add_trace(go.Scatter(x=savings_build["Age"],
+                  y=savings_build["Starting savings + deposits"],name="Starting savings and your deposits",
+                  line=dict(color="#557FA8",width=3)))
+        growth_fig.add_trace(go.Scatter(x=savings_build["Age"],
+                  y=savings_build["Balance (today's money)"],name="Portfolio incl. growth",
+                  line=dict(color="#167C75",width=3)))
+        chart(growth_fig,x_label="Age",y_label=f"Savings ({CURRENCY}, today's money)",height=385)
+        st.caption("Shows cumulative deposits in today's money and the portfolio including modeled investment returns. "
+                   "Annual increases to savings are included in the blue line.")
 
     with st.expander("Ways to improve your retirement plan"):
         cards([
@@ -535,18 +578,10 @@ with retirement_tab:
         ])
         st.caption("An 80% modeled threshold is not a recommended risk level. Higher contributions may improve success, but not guarantee it.")
         st.dataframe(retirement_scenarios,hide_index=True,use_container_width=True)
-        savings_build=projection[projection["Age"]<=int(retirement_age)].copy()
-        savings_build["Starting savings + deposits"]=(
-            retirement_savings+(savings_build["Age"]-int(current_age))*12*retirement_contribution
-        )
-        contribution_fig=go.Figure()
-        contribution_fig.add_trace(go.Scatter(x=savings_build["Age"],
-            y=savings_build["Starting savings + deposits"],name="Your deposits",
-            line=dict(color="#557FA8",width=3)))
-        contribution_fig.add_trace(go.Scatter(x=savings_build["Age"],
-            y=savings_build["Balance (today's money)"],name="Portfolio incl. growth",
-            line=dict(color="#167C75",width=3)))
-        chart(contribution_fig,x_label="Age",y_label=f"Savings ({CURRENCY})",height=320)
+        st.caption(f"Your first monthly saving is {money(retirement_contribution)}. "
+                   f"With {annual_savings_increase:.1f}% annual real growth, the last-year "
+                   f"monthly amount is {money(last_year_contribution)}. "
+                   "Choose 'Deposits and investment growth' above to see this effect.")
 
     with st.expander("Retirement life simulator and annual cash flow"):
         st.caption("At retirement, saving contributions stop. The portfolio keeps earning modeled returns while funding monthly spending.")
@@ -629,6 +664,8 @@ with retirement_tab:
          else f"With current spending, steady-return savings run short near age {depletion_age:.1f}."),
         f"Modeled monthly saving required: {money(needed_per_month)}; extra above current saving: {money(additional_saving)}.",
         f"{simulation['sustain_probability']:.1%} of {simulations} simulated paths fund every withdrawal through age {planning_age}.",
+        f"Savings deposits increase {annual_savings_increase:.1f}% yearly above inflation "
+        f"(monthly contribution in the last saving year: {money(last_year_contribution)}).",
         "Results assume no pensions, taxes, investment fees, or flexible spending; all savings and spending use today's money.",
     ]
     with st.expander("Projection tables and downloads"):
@@ -678,6 +715,8 @@ report_data=generate_pdf_report(
     retirement={"current_age":int(current_age),"retirement_age":int(retirement_age),
           "planning_age":int(planning_age),"savings":retirement_savings,"contribution":retirement_contribution,
           "income":target_income,"return":expected_return,"inflation":inflation,
+          "contribution_growth_pct":annual_savings_increase,
+          "last_year_contribution":last_year_contribution,
           "volatility":volatility,"bank_deposit":bank_deposit_rate,
           "planned_balance":planned_balance,"target":portfolio_target,"needed":needed_per_month,
           "difference":difference,"earliest_age":earliest_age if earliest_age is not None else "Not found",

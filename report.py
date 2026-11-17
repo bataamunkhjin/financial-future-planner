@@ -48,6 +48,10 @@ def _styles():
         textColor=NAVY, alignment=TA_LEFT))
     st.add(ParagraphStyle(name="CellHeader", parent=st["Cell"], fontName="Helvetica-Bold",
         textColor=colors.white))
+    st.add(ParagraphStyle(name="KpiLabel", fontName="Helvetica", fontSize=8,
+        leading=11, textColor=MID, spaceAfter=4))
+    st.add(ParagraphStyle(name="KpiValue", fontName="Helvetica-Bold", fontSize=15,
+        leading=19, textColor=NAVY))
     return st
 
 
@@ -98,7 +102,8 @@ def _line_chart(series: list[tuple[str, np.ndarray, np.ndarray, colors.Color]], 
         d.add(Line(left, y, left + chart_w, y, strokeColor=BORDER, strokeWidth=0.6))
         scaled = value / 1e9 if ymax >= 1e9 else value / 1e6 if ymax >= 1e6 else value / 1e3 if ymax >= 1e3 else value
         unit = "B" if ymax >= 1e9 else "M" if ymax >= 1e6 else "K" if ymax >= 1e3 else ""
-        d.add(String(left-5, y-2.3, f"{scaled:,.0f}{unit}", fontSize=7, textAnchor="end", fillColor=MID))
+        tick = f"{scaled:,.1f}{unit}" if unit and 0 < abs(scaled) < 10 else f"{scaled:,.0f}{unit}"
+        d.add(String(left-5, y-2.3, tick, fontSize=7, textAnchor="end", fillColor=MID))
     for i in range(5):
         x = left + i * chart_w / 4
         d.add(String(x, bottom-15, f"{xmin + i * (xmax-xmin)/4:.0f}", fontSize=7, textAnchor="middle", fillColor=MID))
@@ -167,9 +172,63 @@ def generate_pdf_report(
     def small(txt): story.append(_p(txt, styles["ReportSmall"]))
     def table(headers, rows, widths): story.append(_table(headers, rows, widths, styles)); story.append(Spacer(1, 6))
 
-    story.append(_p("Your financial planning report", styles["ReportTitle"]))
+    # Page 1: executive snapshot. The detail sections start on the following page.
+    story.append(_p("Your financial snapshot", styles["ReportTitle"]))
+    story.append(_p(f"Munkhjin Bataa  |  {date.today():%d %B %Y}  |  Currency: {code}", styles["ReportSub"]))
+    para("A one-page overview of your loan and retirement plan. All figures reflect your current assumptions, not guaranteed outcomes.")
+    headline = [
+        ("Required loan payment / month", _currency(loan["payment"], code)),
+        ("Loan interest avoided", _currency(loan["interest_saved"], code)),
+        ("Projected savings at retirement", _currency(retirement["planned_balance"], code)),
+        ("Simulated retirement success", f'{retirement["sustain_probability"]:.1%}'),
+    ]
+    cells = []
+    for label, value in headline:
+        cells.append([_p(label, styles["KpiLabel"]), _p(value, styles["KpiValue"])])
+    kpis = Table([[cells[0], cells[1]], [cells[2], cells[3]]],
+                 colWidths=[width/2, width/2], rowHeights=[58, 58], hAlign="LEFT")
+    kpis.setStyle(TableStyle([
+        ("BACKGROUND", (0,0),(-1,-1), LITE),
+        ("BOX", (0,0),(-1,-1),.6,BORDER),
+        ("INNERGRID", (0,0),(-1,-1),.6,BORDER),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("LEFTPADDING",(0,0),(-1,-1),12),
+        ("RIGHTPADDING",(0,0),(-1,-1),8),
+    ]))
+    story.append(kpis)
+    story.append(Spacer(1, 7))
+    heading("Loan at a glance")
+    table(["Loan assumption", "Amount", "Loan result", "Amount"], [
+        ["Borrowed", _currency(loan["amount"], code), "Annual interest", f'{loan["rate"]:.2f}%'],
+        ["Term", f'{loan["years"]} years', "Extra monthly payment", _currency(loan["extra"], code)],
+        ["Final payment", str(loan["payoff_date"]), "Months saved", str(loan["months_saved"])],
+    ], [120, 135, 134, width-389])
+    heading("Retirement at a glance")
+    funding_gap = retirement["planned_balance"] - retirement["target"]
+    table(["Retirement assumption", "Value", "Retirement result", "Value"], [
+        ["Current / retirement age", f'{retirement["current_age"]} / {retirement["retirement_age"]}',
+         "Planning age", str(retirement["planning_age"])],
+        ["Monthly saving (start)", _currency(retirement["contribution"], code),
+         "Savings increase / year", f'{retirement.get("contribution_growth_pct",0.0):.1f}% above inflation'],
+        ["Target monthly spending", _currency(retirement["income"], code),
+         "Modeled funding gap / surplus", _currency(funding_gap, code)],
+    ], [125, 119, 143, width-387])
+    heading("Retirement balance by age")
+    story.append(_line_chart([
+        ("Portfolio (constant return)", retirement_projection_df["Age"].to_numpy(),
+         retirement_projection_df["Balance (today's money)"].to_numpy(), TEAL),
+    ], width=width, height=148))
+    small("Chart amounts are in today's purchasing power. Deposits stop at retirement while any remaining portfolio continues earning modeled returns and funding spending.")
+    heading("Key risks and assumptions")
+    small(f'Investment return {retirement["return"]:.1f}%, inflation {retirement["inflation"]:.1f}%, '
+          f'annual volatility {retirement.get("volatility",0.0):.1f}%. The success rate comes from '
+          f'{retirement["simulations"]:,} simulated paths. Taxes, fees and pensions are not modeled. '
+          'Loan rates stay fixed; changing interest rates, prepayment fees and late payments are excluded.')
+    story.append(PageBreak())
+
+    story.append(_p("Detailed financial planning report", styles["ReportTitle"]))
     story.append(_p(f"Munkhjin Bataa  |  {date.today():%d %B %Y}  |  {code}", styles["ReportSub"]))
-    para("This report summarizes the assumptions and automatic what-if analysis currently entered in the app. Figures are estimates, not offers or guarantees.")
+    para("The following sections explain assumptions, detailed calculations, scenario comparisons, and model limitations.")
     heading("01  |  Loan analysis")
     table(["Loan input", "Value", "Loan output", "Value"], [
         ["Starting principal", _currency(loan["amount"], code), "Scheduled monthly P&I", _currency(loan["payment"], code)],
@@ -235,7 +294,9 @@ def generate_pdf_report(
     heading("03  |  Retirement readiness")
     table(["Retirement input", "Value", "Result", "Value"], [
         ["Current age", retirement["current_age"], "Planned retirement age", retirement["retirement_age"]],
-        ["Savings today", _currency(retirement["savings"], code), "Monthly saving", _currency(retirement["contribution"], code)],
+        ["Savings today", _currency(retirement["savings"], code), "Monthly saving (start)", _currency(retirement["contribution"], code)],
+        ["Savings increase / year", f'{retirement.get("contribution_growth_pct",0.0):.1f}% (real)',
+         "Monthly saving (final year)", _currency(retirement.get("last_year_contribution",retirement["contribution"]), code)],
         ["Target monthly spending", _currency(retirement["income"], code), "Plan through age", str(retirement["planning_age"])],
         ["Nominal return assumption", f'{retirement["return"]:.2f}%', "Inflation assumption", f'{retirement["inflation"]:.2f}%'],
         ["Investment volatility", f'{retirement.get("volatility", 15):.2f}%',
@@ -270,7 +331,7 @@ def generate_pdf_report(
     for line in retirement_insights[:4]:
         para("- " + line)
     small(f"Monte Carlo: {retirement['simulations']:,} illustrative independent-annual-return paths. Fully funding every withdrawal through age {retirement['planning_age']}: {retirement['sustain_probability']:.1%}.")
-    small("Not modeled: local tax rules, employer/pension income, fees, changes in contribution or spending, variable loan rates, or correlations. Temporary inflation shocks are analyzed separately with fixed nominal investment returns. Retirement assumptions use constant real purchasing power; loan prepayment comparison uses constant nominal cash flows.")
+    small("Not modeled: local tax rules, employer/pension income, fees, unplanned changes to contributions or spending, variable loan rates, or correlations. Temporary inflation shocks are analyzed separately with fixed nominal investment returns. Retirement assumptions use constant real purchasing power, with optional annual growth to the real monthly contribution; loan prepayment comparison uses constant nominal cash flows.")
     heading("What these results mean")
     table(["Measure", "Interpretation"], [
         ["Total loan interest", "Cumulative interest charged under the assumed fixed-rate amortization schedule."],
@@ -284,7 +345,7 @@ def generate_pdf_report(
     table(["Topic", "Method and important omissions"], [
         ["Monthly loan payment", "Annual nominal loan rate divided by 12; extra repayments go to principal; no penalties."],
         ["Investment comparison", "Constant nominal monthly budget and hypothetical fixed investment returns; no taxes or market risk."],
-        ["Real-value retirement model", "Annual nominal return and inflation converted to a monthly REAL return; spending and deposits constant in today's purchasing power."],
+        ["Real-value retirement model", "Annual nominal return and inflation converted to monthly REAL returns; real savings may grow yearly above inflation while real spending stays fixed."],
         ["Monte Carlo simulation", "Independent annual lognormal return samples spread equally across each year; fixed inflation; fixed random seed."],
         ["Drawdown capital method", "Discounted monthly withdrawals over the selected horizon at an assumed constant real return."],
     ], [149, width - 149])

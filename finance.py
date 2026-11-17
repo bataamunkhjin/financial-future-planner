@@ -155,16 +155,35 @@ def real_monthly_return(annual_return_pct: float, annual_inflation_pct: float) -
     return ((1 + annual_return_pct / 100) / (1 + annual_inflation_pct / 100)) ** (1 / 12) - 1
 
 
+def _contribution_growth_factor(annual_contribution_growth_pct: float, year: int) -> float:
+    """Real savings increase per year above inflation; year zero is unchanged."""
+    if not math.isfinite(annual_contribution_growth_pct) or not -100 < annual_contribution_growth_pct <= 100:
+        raise ValueError("Annual savings increase must be finite and between -100% and 100%.")
+    return (1.0 + annual_contribution_growth_pct / 100.0) ** year
+
+
 def grow_savings(
-    current_savings: float, monthly_contribution: float, months: int, monthly_real_return: float
+    current_savings: float, monthly_contribution: float, months: int, monthly_real_return: float,
+    annual_contribution_growth_pct: float = 0.0,
 ) -> float:
-    """Balance after monthly compounding and end-of-month deposits (today's money)."""
+    """Monthly compounding with optional annual increases to REAL contributions.
+
+    At 0% the original fixed-real-contribution formula is used unchanged.
+    At 5%, the initial monthly amount rises by 5% above inflation each birthday.
+    """
+    _contribution_growth_factor(annual_contribution_growth_pct, 0)
     if months <= 0:
         return float(current_savings)
     growth = (1 + monthly_real_return) ** months
-    if abs(monthly_real_return) < 1e-12:
-        return current_savings + months * monthly_contribution
-    return current_savings * growth + monthly_contribution * (growth - 1) / monthly_real_return
+    if annual_contribution_growth_pct == 0:
+        if abs(monthly_real_return) < 1e-12:
+            return current_savings + months * monthly_contribution
+        return current_savings * growth + monthly_contribution * (growth - 1) / monthly_real_return
+    balance = float(current_savings)
+    for month in range(int(months)):
+        contribution = monthly_contribution * _contribution_growth_factor(annual_contribution_growth_pct, month // 12)
+        balance = balance * (1 + monthly_real_return) + contribution
+    return balance
 
 
 def required_monthly_contribution(
@@ -172,15 +191,13 @@ def required_monthly_contribution(
     months_to_retire: int,
     target_portfolio: float,
     monthly_real_return: float,
+    annual_contribution_growth_pct: float = 0.0,
 ) -> float:
     if months_to_retire <= 0:
         return 0.0 if savings >= target_portfolio else math.inf
     growth = (1 + monthly_real_return) ** months_to_retire
-    annuity_factor = (
-        float(months_to_retire)
-        if abs(monthly_real_return) < 1e-12
-        else (growth - 1) / monthly_real_return
-    )
+    annuity_factor = grow_savings(0.0, 1.0, months_to_retire, monthly_real_return,
+                                 annual_contribution_growth_pct)
     return max(0.0, (target_portfolio - savings * growth) / annuity_factor)
 
 
@@ -208,14 +225,16 @@ def retirement_projection(
     target_monthly_income: float,
     annual_return_pct: float,
     annual_inflation_pct: float,
+    annual_contribution_growth_pct: float = 0.0,
 ) -> tuple[pd.DataFrame, int | None]:
     """Monthly simulation, summarized at each birthday in today's money.
 
-    Before retirement, contribute a constant REAL amount at the end of each month
-    (so the actual nominal contribution would rise with inflation). At and after
+    Before retirement, contribute a REAL amount that may increase annually above
+    inflation (0% growth retains the original constant-real contribution). At and after
     retirement, withdraw constant REAL target income at the end of each month.
     """
     rate = real_monthly_return(annual_return_pct, annual_inflation_pct)
+    _contribution_growth_factor(annual_contribution_growth_pct, 0)
     balance = float(savings)
     contributions = 0.0
     withdrawals = 0.0
@@ -233,8 +252,10 @@ def retirement_projection(
         for month in range(12):
             before_transaction = balance * (1 + rate)
             if age < retirement_age:
-                balance = before_transaction + contribution
-                contributions += contribution
+                this_deposit = contribution * _contribution_growth_factor(
+                    annual_contribution_growth_pct, age - current_age)
+                balance = before_transaction + this_deposit
+                contributions += this_deposit
             else:
                 # A cent-level tolerance avoids a false shortfall in the final
                 # payment caused solely by floating-point compounding error.
@@ -269,6 +290,7 @@ def monte_carlo_projection(
     target_portfolio: float,
     simulations: int = 1000,
     seed: int = 42,
+    annual_contribution_growth_pct: float = 0.0,
 ) -> dict:
     """Independent annual lognormal return scenarios, monthly compounding/deposits.
 
@@ -277,6 +299,7 @@ def monte_carlo_projection(
     """
     if simulations <= 0 or annual_volatility_pct < 0:
         raise ValueError("Simulation count must be positive and volatility >= 0.")
+    _contribution_growth_factor(annual_contribution_growth_pct, 0)
     mean_multiplier = 1 + expected_nominal_return_pct / 100
     if mean_multiplier <= 0:
         raise ValueError("Expected annual return must exceed -100%.")
@@ -302,7 +325,8 @@ def monte_carlo_projection(
         for _ in range(12):
             before_transaction = balances * monthly_real_factor
             if age < retirement_age:
-                balances = before_transaction + monthly_contribution
+                balances = before_transaction + monthly_contribution * _contribution_growth_factor(
+                    annual_contribution_growth_pct, year_idx)
             else:
                 depleted |= (before_transaction + max(0.01, monthly_retirement_income * 1e-10)
                              < monthly_retirement_income)
@@ -416,6 +440,7 @@ def earliest_feasible_retirement_age(
     monthly_contribution: float,
     monthly_target_income: float,
     monthly_real_return: float,
+    annual_contribution_growth_pct: float = 0.0,
 ) -> dict | None:
     """Earliest whole retirement age whose balance funds every modeled withdrawal.
 
@@ -427,7 +452,8 @@ def earliest_feasible_retirement_age(
         raise ValueError("Invalid ages or target monthly income.")
     for age in range(current_age + 1, planning_age):
         months_until = (age - current_age) * 12
-        nest_egg = grow_savings(current_savings, monthly_contribution, months_until, monthly_real_return)
+        nest_egg = grow_savings(current_savings, monthly_contribution, months_until, monthly_real_return,
+                                annual_contribution_growth_pct)
         months_retired = (planning_age - age) * 12
         required = drawdown_portfolio_requirement(monthly_target_income, months_retired, monthly_real_return)
         if nest_egg + max(0.01, required * 1e-10) >= required:
@@ -444,6 +470,7 @@ def retirement_what_if_scenarios(
     expected_return_pct: float,
     inflation_pct: float,
     bank_deposit_pct: float | None = None,
+    annual_contribution_growth_pct: float = 0.0,
 ) -> pd.DataFrame:
     """One-change-at-a-time scenarios, all using the same monthly drawdown test."""
     configs = [
@@ -465,7 +492,8 @@ def retirement_what_if_scenarios(
     rows = []
     for label, age, contrib, nominal_return, inflation in configs:
         real = real_monthly_return(nominal_return, inflation)
-        balance = grow_savings(current_savings, contrib, (age - current_age) * 12, real)
+        balance = grow_savings(current_savings, contrib, (age - current_age) * 12, real,
+                               annual_contribution_growth_pct)
         retire_months = (planning_age - age) * 12
         target = drawdown_portfolio_requirement(monthly_target_income, retire_months, real)
         unit_target = drawdown_portfolio_requirement(1, retire_months, real)
@@ -592,12 +620,14 @@ def simulated_lifetime_savings_goal(
     simulations: int = 1000,
     target_probability: float = 0.80,
     seed: int = 42,
+    annual_contribution_growth_pct: float = 0.0,
 ) -> dict:
     """Minimum real monthly saving for a specified *lifetime funding* probability.
 
     Returns across the complete pre- and post-retirement horizon are sampled once.
     Each simulated path defines:
-       balance at retirement = initial_savings * A + monthly_contribution * B
+       balance at retirement = initial_savings * A + initial_monthly_contribution * B
+       where B includes any annual increases to the monthly contribution.
        minimum required capital = PV of every retirement withdrawal on that path
     Solve for the smallest contribution that succeeds on each path, then select
     the target quantile. This measures paying *every* retirement withdrawal,
@@ -612,6 +642,7 @@ def simulated_lifetime_savings_goal(
         raise ValueError("Require current age < retirement age < planning age and simulations >= 1.")
     if min(current_savings, monthly_contribution, monthly_retirement_income) < 0:
         raise ValueError("Amounts must be nonnegative.")
+    _contribution_growth_factor(annual_contribution_growth_pct, 0)
     if annual_volatility_pct < 0 or expected_nominal_return_pct <= -100 or inflation_pct <= -100:
         raise ValueError("Investment assumptions are out of range.")
 
@@ -631,9 +662,10 @@ def simulated_lifetime_savings_goal(
     annuity = np.zeros(simulations)
     for year in range(retirement_idx):
         monthly_factor = annual_real_factors[year] ** (1 / 12)
+        deposit_multiplier = _contribution_growth_factor(annual_contribution_growth_pct, year)
         for _ in range(12):
             accumulation *= monthly_factor
-            annuity = annuity * monthly_factor + 1.0
+            annuity = annuity * monthly_factor + deposit_multiplier
 
     # Work backward to determine capital needed at retirement for every path.
     # Returns are positive multipliers, so funding all withdrawals is equivalent
