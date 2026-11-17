@@ -1,4 +1,4 @@
-"""Financial Future Planner v5.8 — minimal, emoji-free interface.
+"""Financial Future Planner v5.9 — inflation shock retirement stress test.
 
 Run: python -m streamlit run app.py
 """
@@ -34,6 +34,9 @@ from finance import (
     mortgage_investing_return_scenarios,
     retirement_life_schedule,
     inflation_purchasing_power,
+    inflation_shock_projection,
+    currency_assumptions,
+    inflation_shock_presets,
 )
 from report import generate_pdf_report
 
@@ -253,6 +256,18 @@ currency_choice = st.sidebar.selectbox(
 )
 CURRENCY = CURRENCIES[currency_choice]
 IS_MNT = currency_choice.startswith("MNT")
+CURRENCY_CODE = currency_choice.split(" ")[0]
+DEFAULT_RATES = currency_assumptions(CURRENCY_CODE)
+
+# Rates are snapshots, not live quotes. Currency selection changes assumptions
+# for the corresponding market, and NEVER converts any amounts by exchange rate.
+with st.sidebar.expander("Default rate sources (2026)"):
+    st.caption(f"Loan: {DEFAULT_RATES['loan_pct']:.2f}% — {DEFAULT_RATES['loan_reference']}.")
+    st.caption(f"Bank savings: {DEFAULT_RATES['deposit_pct']:.2f}% — {DEFAULT_RATES['deposit_reference']}.")
+    st.caption(f"Inflation: {DEFAULT_RATES['inflation_pct']:.2f}%. MNT uses your chosen 9% planning assumption; "
+               "USD uses US September 2026 CPI; EUR uses euro-area October 2026 flash CPI.")
+    st.caption("Investment return and volatility are illustrative risk assumptions, NOT published currency statistics. "
+               "All defaults are editable. Currency selection does not convert money.")
 
 
 def money(value: float, decimals: int = 0) -> str:
@@ -659,7 +674,8 @@ with loan_tab:
         with b:
             interest_rate = st.number_input(
                 "Interest rate (%)", min_value=0.0, max_value=50.0,
-                value=16.0 if IS_MNT else 6.5, step=0.25, format="%.2f",
+                value=DEFAULT_RATES["loan_pct"], step=0.25, format="%.2f",
+                key=f"loan_interest_{CURRENCY_CODE}",
             )
         with c:
             loan_years = st.slider("Loan term (years)", min_value=1, max_value=40, value=20 if IS_MNT else 30)
@@ -946,17 +962,34 @@ with retirement_tab:
             st.caption("Illustrative assumptions, not forecasts or guaranteed performance.")
             v1, v2, v3, v4 = st.columns(4, vertical_alignment="bottom")
             with v1:
-                expected_return = st.number_input("Annual nominal return (%)", min_value=-10.0, max_value=30.0, value=7.0, step=0.5)
+                expected_return = st.number_input("Annual nominal return (%)", min_value=-10.0, max_value=30.0,
+                                                  value=DEFAULT_RATES["investment_return_pct"], step=0.5,
+                                                  key=f"investment_return_{CURRENCY_CODE}",
+                                                  help="Hypothetical investment portfolio return, NOT a quoted bank rate.")
             with v2:
-                inflation = st.number_input("Annual inflation (%)", min_value=0.0, max_value=30.0, value=2.5, step=0.5)
+                inflation = st.number_input("Annual inflation (%)", min_value=0.0, max_value=30.0,
+                                            value=DEFAULT_RATES["inflation_pct"], step=0.5,
+                                            key=f"retirement_inflation_{CURRENCY_CODE}")
             with v3:
-                volatility = st.number_input("Annual volatility (%)", min_value=0.0, max_value=60.0, value=15.0, step=1.0)
+                volatility = st.number_input("Annual volatility (%)", min_value=0.0, max_value=60.0,
+                                             value=DEFAULT_RATES["investment_volatility_pct"], step=1.0,
+                                             key=f"retirement_volatility_{CURRENCY_CODE}",
+                                             help="Assumed volatility of your INVESTMENT MIX, not the currency itself. Change to match your risk profile.")
             with v4:
                 planning_age = st.number_input(
                     "Plan through age", min_value=int(retirement_age) + 1,
                     max_value=110, value=max(100, int(retirement_age) + 1), step=1,
                     help="Choose how long you want your savings to support retirement spending. This does not predict how long you will live.",
                 )
+            bank_deposit_rate = st.number_input(
+                "Bank deposit interest (%)", min_value=0.0, max_value=30.0,
+                value=DEFAULT_RATES["deposit_pct"], step=0.1, format="%.2f",
+                key=f"bank_deposit_{CURRENCY_CODE}",
+                help="Reference deposit rate for an illustrative what-if scenario. Not guaranteed for the whole retirement period.",
+            )
+            bank_real_pct = 100 * ((1 + bank_deposit_rate / 100) / (1 + inflation / 100) - 1)
+            st.caption(f"Bank rate after inflation: {bank_real_pct:+.2f}% real/year under constant rates. "
+                       "Deposit rates can change; interest taxes, fees, and account protections are not modeled.")
             simulations = st.select_slider("Monte Carlo scenarios", options=[250, 500, 1000, 2000], value=1000)
             st.caption(
                 "Savings and withdrawals are held constant in today's money, meaning their nominal "
@@ -983,7 +1016,7 @@ with retirement_tab:
     retirement_scenarios = retirement_what_if_scenarios(
         int(current_age), int(retirement_age), int(planning_age),
         retirement_savings, retirement_contribution, target_income,
-        expected_return, inflation,
+        expected_return, inflation, bank_deposit_pct=bank_deposit_rate,
     )
     projection, depletion_age = retirement_projection(
         int(current_age), int(retirement_age), int(planning_age),
@@ -1227,6 +1260,141 @@ with retirement_tab:
             file_name="inflation_purchasing_power.csv", mime="text/csv",
         )
 
+    # v5.9: deterministic inflation shock starting at retirement.
+    # Only scenario controls are added; core retirement inputs are untouched.
+    st.markdown("#### Inflation shock simulator")
+    st.caption(
+        "Explore how a temporary jump in inflation after retirement may affect "
+        "your savings and the future price of the same monthly lifestyle. "
+        "This is a what-if scenario, not a forecast."
+    )
+    with st.container(border=True):
+        shock_c1, shock_c2 = st.columns(2, vertical_alignment="bottom")
+        shock_rates = inflation_shock_presets(inflation)
+        with shock_c1:
+            shock_inflation = st.select_slider(
+                "Inflation during shock (%)",
+                options=shock_rates, value=shock_rates[1],
+                key=f"inflation_shock_{CURRENCY_CODE}",
+                help="Mild, moderate and severe presets are baseline inflation +2, +5 and +9 percentage points. "
+                     "Normal inflation resumes afterward.",
+            )
+        with shock_c2:
+            possible_years = [y for y in (1, 3, 5, 10) if y <= int(planning_age) - int(retirement_age)]
+            default_shock_years = 5 if 5 in possible_years else possible_years[-1]
+            shock_duration = st.select_slider(
+                "Duration of shock (years)", options=possible_years,
+                value=default_shock_years,
+                help="The spike starts at your selected retirement age.",
+            )
+        shock_result = inflation_shock_projection(
+            current_age=int(current_age),
+            retirement_age=int(retirement_age),
+            planning_age=int(planning_age),
+            starting_portfolio_real=planned_balance,
+            monthly_spending_real=target_income,
+            annual_nominal_return_pct=expected_return,
+            baseline_inflation_pct=inflation,
+            shock_inflation_pct=float(shock_inflation),
+            shock_years=int(shock_duration),
+        )
+        if float(shock_inflation) <= float(inflation):
+            st.info("Selected shock inflation is not higher than your baseline. "
+                    "Choose a higher preset for a more severe stress test.")
+        st.caption(
+            f"Shock: {float(shock_inflation):g}% annual inflation from age "
+            f"{int(retirement_age)} to {int(retirement_age)+int(shock_duration)} "
+            f"(baseline {inflation:g}% before and after). Nominal investment returns "
+            f"remain {expected_return:g}%; retirement contributions stop at retirement."
+        )
+        sk1, sk2, sk3, sk4 = st.columns(4)
+        sk1.metric(
+            f"Baseline balance at {planning_age}",
+            money(shock_result["baseline_ending_balance"]),
+        )
+        sk2.metric(
+            f"Shock balance at {planning_age}",
+            money(shock_result["shock_ending_balance"]),
+        )
+        sk3.metric(
+            "Extra monthly cost at horizon",
+            money(max(0.0, shock_result["shock_end_monthly_nominal_spending"]
+                      - shock_result["baseline_end_monthly_nominal_spending"])),
+        )
+        sk4.metric(
+            "Extra unfunded spending",
+            money(max(0.0, shock_result["shock_total_shortfall"]
+                      - shock_result["baseline_total_shortfall"])),
+        )
+        def _funding_label(age):
+            return f"Age {age:.1f}" if age is not None else f"Beyond {planning_age}"
+        st.caption(
+            "First underfunded withdrawal - baseline: "
+            f"{_funding_label(shock_result['baseline_depletion_age'])}; "
+            f"shock: {_funding_label(shock_result['shock_depletion_age'])}. "
+            "Both portfolios are shown in today's purchasing power."
+        )
+
+    shock_yearly = shock_result["yearly"]
+    shock_balance_view, shock_cost_view = st.tabs([
+        "Retirement balance comparison", "Future monthly spending cost",
+    ])
+    with shock_balance_view:
+        shock_balance_fig = go.Figure()
+        shock_balance_fig.add_trace(go.Scatter(
+            x=shock_yearly["Age"],
+            y=shock_yearly["Base balance (today's money)"],
+            name="Normal inflation", line=dict(color="#45D3C3", width=3),
+        ))
+        shock_balance_fig.add_trace(go.Scatter(
+            x=shock_yearly["Age"],
+            y=shock_yearly["Shock balance (today's money)"],
+            name="Inflation shock", line=dict(color="#E5BA69", width=3, dash="dash"),
+        ))
+        shock_balance_fig.add_vrect(
+            x0=int(retirement_age), x1=int(retirement_age) + int(shock_duration),
+            fillcolor="rgba(229,186,105,0.08)", line_width=0,
+        )
+        shock_balance_fig.update_xaxes(title="Age")
+        render_chart(plot_layout(shock_balance_fig, height=365,
+                                 y_label=f"Portfolio, today's money ({CURRENCY})"))
+    with shock_cost_view:
+        shock_cost_fig = go.Figure()
+        shock_cost_fig.add_trace(go.Scatter(
+            x=shock_yearly["Age"],
+            y=shock_yearly["Base monthly spending (nominal)"],
+            name="Normal inflation", line=dict(color="#45D3C3", width=3),
+        ))
+        shock_cost_fig.add_trace(go.Scatter(
+            x=shock_yearly["Age"],
+            y=shock_yearly["Shock monthly spending (nominal)"],
+            name="Inflation shock", line=dict(color="#E5BA69", width=3, dash="dash"),
+        ))
+        shock_cost_fig.add_vrect(
+            x0=int(retirement_age), x1=int(retirement_age) + int(shock_duration),
+            fillcolor="rgba(229,186,105,0.08)", line_width=0,
+        )
+        shock_cost_fig.update_xaxes(title="Age")
+        render_chart(plot_layout(shock_cost_fig, height=365,
+                                 y_label=f"Monthly spending, future money ({CURRENCY})"))
+    st.caption(
+        "Shaded period = temporary inflation shock. Spending is maintained at your "
+        "chosen purchasing power; the future nominal cash amount therefore rises faster "
+        "during the shock. A higher price level persists even when inflation returns "
+        "to normal. This fixed-return analysis does not update the Monte Carlo probability."
+    )
+    with st.expander("Inflation shock: year-by-year details"):
+        table_shock = shock_yearly.copy()
+        paged_table(
+            table_shock, key="inflation_shock_years",
+            formats={col: "{:,.0f}" for col in table_shock.columns if col != "Age"},
+        )
+        st.download_button(
+            "Download inflation shock comparison CSV",
+            shock_yearly.to_csv(index=False).encode("utf-8-sig"),
+            file_name="retirement_inflation_shock.csv", mime="text/csv",
+        )
+
     st.markdown("#### Automatic retirement what-if scenarios")
     show_retirement_scenarios = retirement_scenarios.copy()
     for col in ["Monthly Savings", "Portfolio", "Capital Needed", "Surplus / Shortfall", "Sustainable Monthly Income"]:
@@ -1237,8 +1405,9 @@ with retirement_tab:
     st.dataframe(show_retirement_scenarios, use_container_width=True, hide_index=True)
     st.caption(
         "Each what-if scenario changes only one assumption from your base plan. "
-        "Portfolio values and target income are in today's purchasing power; "
-        "return and inflation changes are in percentage points (pp), not percentages of the rate."
+        "The bank deposit row assumes the selected reference rate persists for the whole horizon "
+        "and has no investment volatility; real bank deposits may have changing rates, taxes, and risks. "
+        "Portfolio and spending amounts use today's purchasing power."
     )
 
     st.markdown("#### Personalized retirement insights")
@@ -1436,7 +1605,8 @@ report_data = generate_pdf_report(
         "planning_age": int(planning_age), "savings": retirement_savings,
         "contribution": retirement_contribution, "income": target_income,
         "return": expected_return,
-        "inflation": inflation, "planned_balance": planned_balance,
+        "inflation": inflation, "volatility": volatility,
+        "bank_deposit": bank_deposit_rate, "planned_balance": planned_balance,
         "target": portfolio_target, "needed": needed_per_month,
         "difference": difference,
         "earliest_age": earliest_age if earliest_age is not None else "Not found",
@@ -1459,6 +1629,7 @@ report_data = generate_pdf_report(
     investment_insights=investment_insights,
     retirement_life_df=retirement_yearly,
     inflation_df=inflation_table,
+    inflation_shock=shock_result,
 )
 with st.sidebar:
     st.divider()

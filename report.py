@@ -150,6 +150,7 @@ def generate_pdf_report(
     savings_goal: dict | None = None,
     retirement_life_df: pd.DataFrame | None = None,
     inflation_df: pd.DataFrame | None = None,
+    inflation_shock: dict | None = None,
 ) -> bytes:
     """Generate a small multi-page financial report from already-calculated app data."""
     code = code if code in {"USD", "MNT", "EUR"} else "CUR"
@@ -237,11 +238,13 @@ def generate_pdf_report(
         ["Savings today", _currency(retirement["savings"], code), "Monthly saving", _currency(retirement["contribution"], code)],
         ["Target monthly spending", _currency(retirement["income"], code), "Plan through age", str(retirement["planning_age"])],
         ["Nominal return assumption", f'{retirement["return"]:.2f}%', "Inflation assumption", f'{retirement["inflation"]:.2f}%'],
+        ["Investment volatility", f'{retirement.get("volatility", 15):.2f}%',
+         "Bank deposit benchmark", f'{retirement.get("bank_deposit", 0):.2f}%'],
         ["Est. retirement portfolio", _currency(retirement["planned_balance"], code), "Capital needed for spending", _currency(retirement["target"], code)],
         ["Needed monthly saving", _currency(retirement["needed"], code), "Surplus / shortfall", _currency(retirement["difference"], code)],
         ["Earliest modeled retirement", str(retirement["earliest_age"]), "Spending success (sim.)", f'{retirement["sustain_probability"]:.1%}'],
     ], [127, 119, 135, width-381])
-    small("Required capital is the present value of all planned monthly withdrawals through the planning age at a constant real return. Returns keep compounding after retirement; contributions end at retirement. This is not guaranteed.")
+    small("Required capital is the present value of all planned monthly withdrawals through the planning age at a constant real return. Returns keep compounding after retirement; contributions end at retirement. Market return and volatility inputs are illustrative; bank deposit rates are published reference benchmarks and are not guaranteed over the modeled horizon. This is not a guarantee.")
     if savings_goal is not None:
         heading("Savings target for simulated spending success")
         table(["Measurement", "Value", "Measurement", "Value"], [
@@ -267,7 +270,7 @@ def generate_pdf_report(
     for line in retirement_insights[:4]:
         para("- " + line)
     small(f"Monte Carlo: {retirement['simulations']:,} illustrative independent-annual-return paths. Fully funding every withdrawal through age {retirement['planning_age']}: {retirement['sustain_probability']:.1%}.")
-    small("Not modeled: local tax rules, employer/pension income, fees, shocks to inflation, changes in contribution or spending, variable mortgage rates, or correlations. Retirement assumptions use constant real purchasing power; mortgage investing comparison uses constant nominal cash flows.")
+    small("Not modeled: local tax rules, employer/pension income, fees, changes in contribution or spending, variable mortgage rates, or correlations. Temporary inflation shocks are analyzed separately with fixed nominal investment returns. Retirement assumptions use constant real purchasing power; mortgage investing comparison uses constant nominal cash flows.")
     heading("What these results mean")
     table(["Measure", "Interpretation"], [
         ["Total loan interest", "Cumulative interest charged under the assumed fixed-rate amortization schedule."],
@@ -321,6 +324,60 @@ def generate_pdf_report(
             f"The example spends {_currency(retirement['income'], code)} per month in today's money. "
             "Nominal future amounts rise with the assumed inflation rate; this does not mean "
             "a higher standard of living. No foreign exchange conversion is performed."
+        )
+
+    if inflation_shock is not None:
+        story.append(PageBreak())
+        heading("06  |  Inflation shock retirement stress test")
+        para(
+            "This scenario assumes a temporary increase in annual inflation "
+            "starting at retirement, followed by a return to normal inflation. "
+            "The nominal investment return stays unchanged. Monthly retirement "
+            "spending is adjusted to preserve the same purchasing power."
+        )
+        base_short = inflation_shock["baseline_total_shortfall"]
+        stress_short = inflation_shock["shock_total_shortfall"]
+        def _deplete(value):
+            return f"Age {value:.1f}" if value is not None else "Beyond plan"
+        table(["Assumption", "Normal scenario", "Inflation shock"], [
+            ["Annual inflation",
+             f'{inflation_shock["baseline_annual_inflation_pct"]:.1f}%',
+             f'{inflation_shock["shock_annual_inflation_pct"]:.1f}% for {inflation_shock["shock_duration_years"]} years'],
+            ["Retirement balance (real)",
+             _currency(retirement["planned_balance"], code),
+             _currency(retirement["planned_balance"], code)],
+            ["Balance at planning age (real)",
+             _currency(inflation_shock["baseline_ending_balance"], code),
+             _currency(inflation_shock["shock_ending_balance"], code)],
+            ["First underfunded month",
+             _deplete(inflation_shock["baseline_depletion_age"]),
+             _deplete(inflation_shock["shock_depletion_age"])],
+            ["Unfunded retirement spending (real)",
+             _currency(base_short, code), _currency(stress_short, code)],
+            ["Monthly spending at horizon (nominal)",
+             _currency(inflation_shock["baseline_end_monthly_nominal_spending"], code),
+             _currency(inflation_shock["shock_end_monthly_nominal_spending"], code)],
+        ], [190, 154, width - 344])
+        yearly = inflation_shock["yearly"]
+        heading("Savings during retirement - today's purchasing power")
+        story.append(_line_chart([
+            ("Normal inflation", yearly["Age"].to_numpy(),
+             yearly["Base balance (today's money)"].to_numpy(), TEAL),
+            ("Inflation shock", yearly["Age"].to_numpy(),
+             yearly["Shock balance (today's money)"].to_numpy(), ORANGE),
+        ], width=width, height=175))
+        heading("Monthly living costs in future nominal money")
+        story.append(_line_chart([
+            ("Normal inflation", yearly["Age"].to_numpy(),
+             yearly["Base monthly spending (nominal)"].to_numpy(), TEAL),
+            ("Inflation shock", yearly["Age"].to_numpy(),
+             yearly["Shock monthly spending (nominal)"].to_numpy(), ORANGE),
+        ], width=width, height=175))
+        small(
+            "The shock starts at retirement and lasts for the selected number of years. "
+            "Before retirement both strategies have identical savings and baseline inflation. "
+            "This is an illustrative fixed-return stress test, not a market forecast; "
+            "the Monte Carlo success probability is not recalculated for variable inflation."
         )
 
     doc.build(story)

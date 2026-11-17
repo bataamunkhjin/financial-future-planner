@@ -14,6 +14,56 @@ import numpy as np
 import pandas as pd
 
 
+
+# Static educational presets, reviewed on 17 November 2026. No external
+# requests occur while the Streamlit app runs. The official bank reference
+# rates apply to different credit/deposit products; users should enter their
+# own bank quote when comparing real offers.
+CURRENCY_ASSUMPTIONS = {
+    "MNT": {
+        "loan_pct": 17.60, "deposit_pct": 11.80,
+        "inflation_pct": 9.00,  # User-selected planning assumption; not latest CPI.
+        "investment_return_pct": 14.00, "investment_volatility_pct": 20.00,
+        "loan_reference": "Bank of Mongolia: bank lending rate, September 2026",
+        "deposit_reference": "Bank of Mongolia: new deposit rate, September 2026",
+    },
+    "USD": {
+        "loan_pct": 7.11, "deposit_pct": 1.81,
+        "inflation_pct": 3.70,
+        "investment_return_pct": 7.00, "investment_volatility_pct": 15.00,
+        "loan_reference": "Freddie Mac: US 30-year fixed mortgage, 12 November 2026",
+        "deposit_reference": "FDIC: US national 12-month CD average, 16 November 2026",
+    },
+    "EUR": {
+        "loan_pct": 3.62, "deposit_pct": 2.37,
+        "inflation_pct": 4.00,
+        "investment_return_pct": 7.00, "investment_volatility_pct": 15.00,
+        "loan_reference": "ECB: euro-area new house-purchase loans, September 2026",
+        "deposit_reference": "ECB: euro-area new agreed-maturity household deposits, September 2026",
+    },
+}
+
+
+def currency_assumptions(code: str) -> dict:
+    """Return editable starting assumptions for one currency/market.
+
+    Investment returns and volatility are EXAMPLES, not observed statistics.
+    They depend on asset allocation, NOT just currency denomination.
+    """
+    try:
+        return CURRENCY_ASSUMPTIONS[code.upper()].copy()
+    except (KeyError, AttributeError) as exc:
+        raise ValueError("Currency must be MNT, USD, or EUR") from exc
+
+
+def inflation_shock_presets(baseline_pct: float) -> list[float]:
+    """Three increasing inflation shocks relative to the user's baseline."""
+    import math
+    if not math.isfinite(baseline_pct) or not 0 <= baseline_pct <= 30:
+        raise ValueError("Annual inflation baseline must be between 0 and 30%")
+    return [round(baseline_pct + delta, 2) for delta in (2.0, 5.0, 9.0)]
+
+
 def add_months(base: date, months: int) -> date:
     """Add calendar months and clip day-of-month (e.g., Jan 31 -> Feb 28)."""
     month_index = base.year * 12 + base.month - 1 + months
@@ -393,6 +443,7 @@ def retirement_what_if_scenarios(
     monthly_target_income: float,
     expected_return_pct: float,
     inflation_pct: float,
+    bank_deposit_pct: float | None = None,
 ) -> pd.DataFrame:
     """One-change-at-a-time scenarios, all using the same monthly drawdown test."""
     configs = [
@@ -402,6 +453,11 @@ def retirement_what_if_scenarios(
         ("Inflation +2 pp", retirement_age, monthly_contribution, expected_return_pct, inflation_pct + 2),
         ("Savings +10%", retirement_age, monthly_contribution * 1.1, expected_return_pct, inflation_pct),
     ]
+    if bank_deposit_pct is not None:
+        if not math.isfinite(bank_deposit_pct) or not -99.0 < bank_deposit_pct <= 100.0:
+            raise ValueError("Bank deposit rate must be finite and between -99 and 100%")
+        configs.append(("Bank deposit at reference rate", retirement_age,
+                        monthly_contribution, bank_deposit_pct, inflation_pct))
     if retirement_age - 5 > current_age:
         configs.append(("Retire 5 years earlier", retirement_age - 5, monthly_contribution, expected_return_pct, inflation_pct))
     if retirement_age + 5 < planning_age:
@@ -818,4 +874,134 @@ def model_supported_monthly_spending(
         "capacities": capacities,
         "median_retirement_balance": float(np.median(at_retirement)),
         "simulations": simulations,
+    }
+
+
+# -------------------- Financial Future Planner v5.9 --------------------
+
+def inflation_shock_projection(
+    current_age: int,
+    retirement_age: int,
+    planning_age: int,
+    starting_portfolio_real: float,
+    monthly_spending_real: float,
+    annual_nominal_return_pct: float,
+    baseline_inflation_pct: float,
+    shock_inflation_pct: float,
+    shock_years: int = 5,
+) -> dict:
+    """Compare baseline inflation with a temporary higher-inflation retirement shock.
+
+    The *shock starts at retirement* and persists for ``shock_years``; after
+    that, inflation returns to the baseline rate. Before retirement the two
+    scenarios are identical. The investment's NOMINAL return stays constant.
+    Real contributions stop at retirement; real planned withdrawals continue
+    each month and are inflation-indexed in nominal currency.
+
+    Real portfolio balances are expressed in purchasing power as of current_age.
+    Nominal spending is expressed in actual future money: inflation from
+    current_age to retirement is included at the baseline rate in both paths.
+    Returns are credited before an end-of-month withdrawal, consistent with
+    ``retirement_life_schedule`` and ``retirement_projection``.
+
+    This is an illustrative deterministic stress test, not a forecast or a
+    Monte Carlo probability calculation.
+    """
+    import math
+
+    if not (0 <= current_age < retirement_age < planning_age):
+        raise ValueError("Require current_age < retirement_age < planning_age.")
+    if not math.isfinite(starting_portfolio_real) or starting_portfolio_real < 0:
+        raise ValueError("Starting portfolio must be a nonnegative finite amount.")
+    if not math.isfinite(monthly_spending_real) or monthly_spending_real < 0:
+        raise ValueError("Monthly spending must be a nonnegative finite amount.")
+    rates = (annual_nominal_return_pct, baseline_inflation_pct, shock_inflation_pct)
+    if not all(math.isfinite(x) and -100 < x <= 100 for x in rates):
+        raise ValueError("Annual return/inflation rates must be finite and greater than -100%.")
+    if not isinstance(shock_years, int) or not 1 <= shock_years <= planning_age - retirement_age:
+        raise ValueError("Shock years must be a positive whole number within retirement.")
+
+    monthly_base_return = real_monthly_return(annual_nominal_return_pct, baseline_inflation_pct)
+    monthly_shock_return = real_monthly_return(annual_nominal_return_pct, shock_inflation_pct)
+    monthly_baseline_cpi = (1 + baseline_inflation_pct / 100) ** (1 / 12)
+    monthly_shock_cpi = (1 + shock_inflation_pct / 100) ** (1 / 12)
+    # Both futures start at the same forecast portfolio in CURRENT purchasing power.
+    base_balance = stressed_balance = float(starting_portfolio_real)
+    # Price levels, measured relative to TODAY, not retirement day.
+    pre_retirement_price_level = (1 + baseline_inflation_pct / 100) ** (retirement_age - current_age)
+    base_cpi = stressed_cpi = pre_retirement_price_level
+    shortage_base = shortage_stressed = 0.0
+    depleted_base = depleted_stressed = None
+    months = (planning_age - retirement_age) * 12
+    shock_months = shock_years * 12
+    rows = [{
+        "Age": float(retirement_age),
+        "Base balance (today's money)": base_balance,
+        "Shock balance (today's money)": stressed_balance,
+        "Base monthly spending (nominal)": monthly_spending_real * base_cpi,
+        "Shock monthly spending (nominal)": monthly_spending_real * stressed_cpi,
+        "Cumulative base shortfall (real)": 0.0,
+        "Cumulative shock shortfall (real)": 0.0,
+    }]
+    monthly_rows = []
+    for month in range(1, months + 1):
+        under_shock = month <= shock_months
+        stressed_rate = monthly_shock_return if under_shock else monthly_base_return
+        stressed_cpi *= monthly_shock_cpi if under_shock else monthly_baseline_cpi
+        base_cpi *= monthly_baseline_cpi
+
+        available_base = max(0.0, base_balance * (1 + monthly_base_return))
+        available_stress = max(0.0, stressed_balance * (1 + stressed_rate))
+        unpaid_base = max(0.0, monthly_spending_real - available_base)
+        unpaid_stressed = max(0.0, monthly_spending_real - available_stress)
+        epsilon = max(0.01, monthly_spending_real * 1e-10)
+        if unpaid_base <= epsilon:
+            unpaid_base = 0.0
+        if unpaid_stressed <= epsilon:
+            unpaid_stressed = 0.0
+        if unpaid_base > 0.0 and depleted_base is None:
+            depleted_base = retirement_age + month / 12
+        if unpaid_stressed > 0.0 and depleted_stressed is None:
+            depleted_stressed = retirement_age + month / 12
+        base_balance = max(0.0, available_base - min(available_base, monthly_spending_real))
+        stressed_balance = max(0.0, available_stress - min(available_stress, monthly_spending_real))
+        shortage_base += unpaid_base
+        shortage_stressed += unpaid_stressed
+        monthly_rows.append({
+            "Retirement Month": month,
+            "Age": retirement_age + month / 12,
+            "Inflation in shock path (%)": shock_inflation_pct if under_shock else baseline_inflation_pct,
+            "Base balance (today's money)": base_balance,
+            "Shock balance (today's money)": stressed_balance,
+            "Base monthly spending (nominal)": monthly_spending_real * base_cpi,
+            "Shock monthly spending (nominal)": monthly_spending_real * stressed_cpi,
+            "Base unfunded spending (real)": unpaid_base,
+            "Shock unfunded spending (real)": unpaid_stressed,
+        })
+        if month % 12 == 0:
+            rows.append({
+                "Age": float(retirement_age + month / 12),
+                "Base balance (today's money)": base_balance,
+                "Shock balance (today's money)": stressed_balance,
+                "Base monthly spending (nominal)": monthly_spending_real * base_cpi,
+                "Shock monthly spending (nominal)": monthly_spending_real * stressed_cpi,
+                "Cumulative base shortfall (real)": shortage_base,
+                "Cumulative shock shortfall (real)": shortage_stressed,
+            })
+    return {
+        "yearly": pd.DataFrame(rows),
+        "monthly": pd.DataFrame(monthly_rows),
+        "baseline_depletion_age": depleted_base,
+        "shock_depletion_age": depleted_stressed,
+        "baseline_ending_balance": base_balance,
+        "shock_ending_balance": stressed_balance,
+        "baseline_total_shortfall": shortage_base,
+        "shock_total_shortfall": shortage_stressed,
+        "baseline_end_monthly_nominal_spending": monthly_spending_real * base_cpi,
+        "shock_end_monthly_nominal_spending": monthly_spending_real * stressed_cpi,
+        "shock_annual_inflation_pct": shock_inflation_pct,
+        "baseline_annual_inflation_pct": baseline_inflation_pct,
+        "shock_duration_years": shock_years,
+        "shock_start_age": retirement_age,
+        "shock_end_age": retirement_age + shock_years,
     }
