@@ -1,0 +1,7 @@
+﻿metric,series,source,url,notes
+Lending interest rate (%),FR.INR.LEND,World Bank WDI,https://data.worldbank.org/indicator/FR.INR.LEND,Country coverage is sparse; this series is not necessarily a specific consumer loan APR.
+Deposit interest rate (%),FR.INR.DPST,World Bank WDI,https://data.worldbank.org/indicator/FR.INR.DPST,Country coverage is sparse; this series is not necessarily a retail product offer.
+Mongolia policy rate,Бодлогын хүү,User-supplied central bank workbook,https://www.mongolbank.mn/,Event dates and rate values from source workbook; policy rate is not retail loan or deposit rate.
+Euro area policy rate,Main refinancing operations,User-supplied ECB workbook,https://www.ecb.europa.eu/stats/policy_and_exchange_rates/key_ecb_interest_rates/html/index.en.html,Rate decision event series; NOT euro-area consumer lending rate or deposit rate.
+United States supplied daily proxy,Value,User-supplied CSV; exact series definition unspecified,,Do not present as an official federal funds target without verifying the dataset provenance.
+Inflation,Not supplied,N/A,,No historical inflation observations among the nine uploaded files; existing inflation assumptions remain hypothetical.

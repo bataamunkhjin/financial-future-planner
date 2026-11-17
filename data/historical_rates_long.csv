@@ -1,0 +1,137 @@
+﻿region_code,region,year,metric,rate_pct,rate_category,source_group
+MNG,Mongolia,2000,lending_rate_pct,36.95269,Retail lending benchmark,WDI
+MNG,Mongolia,2000,deposit_rate_pct,16.8,Retail deposit benchmark,WDI
+MNG,Mongolia,2001,lending_rate_pct,37.35,Retail lending benchmark,WDI
+MNG,Mongolia,2001,deposit_rate_pct,14.3,Retail deposit benchmark,WDI
+MNG,Mongolia,2002,lending_rate_pct,35.51667,Retail lending benchmark,WDI
+MNG,Mongolia,2002,deposit_rate_pct,13.21667,Retail deposit benchmark,WDI
+MNG,Mongolia,2003,lending_rate_pct,31.90667,Retail lending benchmark,WDI
+MNG,Mongolia,2003,deposit_rate_pct,14.01667,Retail deposit benchmark,WDI
+MNG,Mongolia,2004,lending_rate_pct,31.47333,Retail lending benchmark,WDI
+MNG,Mongolia,2004,deposit_rate_pct,14.15,Retail deposit benchmark,WDI
+MNG,Mongolia,2005,lending_rate_pct,30.57083,Retail lending benchmark,WDI
+MNG,Mongolia,2005,deposit_rate_pct,13.0,Retail deposit benchmark,WDI
+MNG,Mongolia,2006,lending_rate_pct,26.93455,Retail lending benchmark,WDI
+MNG,Mongolia,2006,deposit_rate_pct,13.00667,Retail deposit benchmark,WDI
+MNG,Mongolia,2007,lending_rate_pct,21.82833,Retail lending benchmark,WDI
+MNG,Mongolia,2007,deposit_rate_pct,13.45917,Retail deposit benchmark,WDI
+MNG,Mongolia,2008,lending_rate_pct,20.58333,Retail lending benchmark,WDI
+MNG,Mongolia,2008,deposit_rate_pct,11.39167,Retail deposit benchmark,WDI
+MNG,Mongolia,2008,policy_rate_annual_avg_pct,9.55792,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2009,lending_rate_pct,21.66696,Retail lending benchmark,WDI
+MNG,Mongolia,2009,deposit_rate_pct,13.28212,Retail deposit benchmark,WDI
+MNG,Mongolia,2009,policy_rate_annual_avg_pct,11.31781,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2010,lending_rate_pct,20.06878,Retail lending benchmark,WDI
+MNG,Mongolia,2010,deposit_rate_pct,11.85898,Retail deposit benchmark,WDI
+MNG,Mongolia,2010,policy_rate_annual_avg_pct,10.6411,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2011,lending_rate_pct,16.60944,Retail lending benchmark,WDI
+MNG,Mongolia,2011,deposit_rate_pct,10.47421,Retail deposit benchmark,WDI
+MNG,Mongolia,2011,policy_rate_annual_avg_pct,11.51849,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2012,lending_rate_pct,18.11381,Retail lending benchmark,WDI
+MNG,Mongolia,2012,deposit_rate_pct,11.27378,Retail deposit benchmark,WDI
+MNG,Mongolia,2012,policy_rate_annual_avg_pct,12.99727,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2013,lending_rate_pct,18.48202,Retail lending benchmark,WDI
+MNG,Mongolia,2013,deposit_rate_pct,12.04569,Retail deposit benchmark,WDI
+MNG,Mongolia,2013,policy_rate_annual_avg_pct,11.28356,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2014,lending_rate_pct,19.02543,Retail lending benchmark,WDI
+MNG,Mongolia,2014,deposit_rate_pct,12.31496,Retail deposit benchmark,WDI
+MNG,Mongolia,2014,policy_rate_annual_avg_pct,11.13288,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2015,lending_rate_pct,19.56272,Retail lending benchmark,WDI
+MNG,Mongolia,2015,deposit_rate_pct,12.97874,Retail deposit benchmark,WDI
+MNG,Mongolia,2015,policy_rate_annual_avg_pct,12.96164,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2016,lending_rate_pct,19.74154,Retail lending benchmark,WDI
+MNG,Mongolia,2016,deposit_rate_pct,13.27167,Retail deposit benchmark,WDI
+MNG,Mongolia,2016,policy_rate_annual_avg_pct,12.68443,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2017,lending_rate_pct,20.00692,Retail lending benchmark,WDI
+MNG,Mongolia,2017,deposit_rate_pct,12.95586,Retail deposit benchmark,WDI
+MNG,Mongolia,2017,policy_rate_annual_avg_pct,12.88493,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2018,lending_rate_pct,17.71427,Retail lending benchmark,WDI
+MNG,Mongolia,2018,deposit_rate_pct,12.43616,Retail deposit benchmark,WDI
+MNG,Mongolia,2018,policy_rate_annual_avg_pct,10.31507,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2019,lending_rate_pct,16.99662,Retail lending benchmark,WDI
+MNG,Mongolia,2019,deposit_rate_pct,10.95765,Retail deposit benchmark,WDI
+MNG,Mongolia,2019,policy_rate_annual_avg_pct,11.0,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2020,lending_rate_pct,16.93063,Retail lending benchmark,WDI
+MNG,Mongolia,2020,deposit_rate_pct,10.25702,Retail deposit benchmark,WDI
+MNG,Mongolia,2020,policy_rate_annual_avg_pct,8.97541,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2021,lending_rate_pct,16.00676,Retail lending benchmark,WDI
+MNG,Mongolia,2021,deposit_rate_pct,6.59972,Retail deposit benchmark,WDI
+MNG,Mongolia,2021,policy_rate_annual_avg_pct,6.0,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2022,policy_rate_annual_avg_pct,9.53425,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2023,policy_rate_annual_avg_pct,13.0,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2024,policy_rate_annual_avg_pct,11.27596,Central-bank policy / supplied proxy,Policy data
+MNG,Mongolia,2025,policy_rate_annual_avg_pct,11.6274,Central-bank policy / supplied proxy,Policy data
+USA,United States,2000,lending_rate_pct,9.23333,Retail lending benchmark,WDI
+USA,United States,2000,policy_rate_annual_avg_pct,6.23743,Central-bank policy / supplied proxy,Policy data
+USA,United States,2001,lending_rate_pct,6.92167,Retail lending benchmark,WDI
+USA,United States,2001,policy_rate_annual_avg_pct,3.87836,Central-bank policy / supplied proxy,Policy data
+USA,United States,2002,lending_rate_pct,4.675,Retail lending benchmark,WDI
+USA,United States,2002,policy_rate_annual_avg_pct,1.66679,Central-bank policy / supplied proxy,Policy data
+USA,United States,2003,lending_rate_pct,4.1225,Retail lending benchmark,WDI
+USA,United States,2003,policy_rate_annual_avg_pct,1.12649,Central-bank policy / supplied proxy,Policy data
+USA,United States,2004,lending_rate_pct,4.34,Retail lending benchmark,WDI
+USA,United States,2004,policy_rate_annual_avg_pct,1.35033,Central-bank policy / supplied proxy,Policy data
+USA,United States,2005,lending_rate_pct,6.18917,Retail lending benchmark,WDI
+USA,United States,2005,policy_rate_annual_avg_pct,3.21707,Central-bank policy / supplied proxy,Policy data
+USA,United States,2006,lending_rate_pct,7.9575,Retail lending benchmark,WDI
+USA,United States,2006,policy_rate_annual_avg_pct,4.96542,Central-bank policy / supplied proxy,Policy data
+USA,United States,2007,lending_rate_pct,8.05,Retail lending benchmark,WDI
+USA,United States,2007,policy_rate_annual_avg_pct,5.01732,Central-bank policy / supplied proxy,Policy data
+USA,United States,2008,lending_rate_pct,5.0875,Retail lending benchmark,WDI
+USA,United States,2008,policy_rate_annual_avg_pct,1.92418,Central-bank policy / supplied proxy,Policy data
+USA,United States,2009,lending_rate_pct,3.25,Retail lending benchmark,WDI
+USA,United States,2009,policy_rate_annual_avg_pct,0.1586,Central-bank policy / supplied proxy,Policy data
+USA,United States,2010,lending_rate_pct,3.25,Retail lending benchmark,WDI
+USA,United States,2010,policy_rate_annual_avg_pct,0.17625,Central-bank policy / supplied proxy,Policy data
+USA,United States,2011,lending_rate_pct,3.25,Retail lending benchmark,WDI
+USA,United States,2011,policy_rate_annual_avg_pct,0.10151,Central-bank policy / supplied proxy,Policy data
+USA,United States,2012,lending_rate_pct,3.25,Retail lending benchmark,WDI
+USA,United States,2012,policy_rate_annual_avg_pct,0.14057,Central-bank policy / supplied proxy,Policy data
+USA,United States,2013,lending_rate_pct,3.25,Retail lending benchmark,WDI
+USA,United States,2013,policy_rate_annual_avg_pct,0.10734,Central-bank policy / supplied proxy,Policy data
+USA,United States,2014,lending_rate_pct,3.25,Retail lending benchmark,WDI
+USA,United States,2014,policy_rate_annual_avg_pct,0.08849,Central-bank policy / supplied proxy,Policy data
+USA,United States,2015,lending_rate_pct,3.26,Retail lending benchmark,WDI
+USA,United States,2015,policy_rate_annual_avg_pct,0.13373,Central-bank policy / supplied proxy,Policy data
+USA,United States,2016,lending_rate_pct,3.51167,Retail lending benchmark,WDI
+USA,United States,2016,policy_rate_annual_avg_pct,0.3932,Central-bank policy / supplied proxy,Policy data
+USA,United States,2017,lending_rate_pct,4.09667,Retail lending benchmark,WDI
+USA,United States,2017,policy_rate_annual_avg_pct,1.00296,Central-bank policy / supplied proxy,Policy data
+USA,United States,2018,lending_rate_pct,4.90417,Retail lending benchmark,WDI
+USA,United States,2018,policy_rate_annual_avg_pct,1.83493,Central-bank policy / supplied proxy,Policy data
+USA,United States,2019,lending_rate_pct,5.2825,Retail lending benchmark,WDI
+USA,United States,2019,policy_rate_annual_avg_pct,2.15726,Central-bank policy / supplied proxy,Policy data
+USA,United States,2020,lending_rate_pct,3.54417,Retail lending benchmark,WDI
+USA,United States,2020,policy_rate_annual_avg_pct,0.37224,Central-bank policy / supplied proxy,Policy data
+USA,United States,2021,lending_rate_pct,3.25,Retail lending benchmark,WDI
+USA,United States,2021,policy_rate_annual_avg_pct,0.07868,Central-bank policy / supplied proxy,Policy data
+USA,United States,2022,policy_rate_annual_avg_pct,1.69219,Central-bank policy / supplied proxy,Policy data
+USA,United States,2023,policy_rate_annual_avg_pct,5.02586,Central-bank policy / supplied proxy,Policy data
+USA,United States,2024,policy_rate_annual_avg_pct,5.14216,Central-bank policy / supplied proxy,Policy data
+USA,United States,2025,policy_rate_annual_avg_pct,4.21175,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2000,policy_rate_annual_avg_pct,4.01844,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2001,policy_rate_annual_avg_pct,4.36507,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2002,policy_rate_annual_avg_pct,3.21438,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2003,policy_rate_annual_avg_pct,2.25822,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2004,policy_rate_annual_avg_pct,2.0,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2005,policy_rate_annual_avg_pct,2.01781,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2006,policy_rate_annual_avg_pct,2.76027,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2007,policy_rate_annual_avg_pct,3.83904,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2008,policy_rate_annual_avg_pct,3.90027,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2009,policy_rate_annual_avg_pct,1.43836,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2010,policy_rate_annual_avg_pct,1.25,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2011,policy_rate_annual_avg_pct,1.31918,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2012,policy_rate_annual_avg_pct,0.88115,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2013,policy_rate_annual_avg_pct,0.55342,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2014,policy_rate_annual_avg_pct,0.16315,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2015,policy_rate_annual_avg_pct,0.05,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2016,policy_rate_annual_avg_pct,0.01025,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2017,policy_rate_annual_avg_pct,0.0,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2018,policy_rate_annual_avg_pct,0.0,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2019,policy_rate_annual_avg_pct,0.0,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2020,policy_rate_annual_avg_pct,0.0,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2021,policy_rate_annual_avg_pct,0.0,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2022,policy_rate_annual_avg_pct,0.57877,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2023,policy_rate_annual_avg_pct,3.77877,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2024,policy_rate_annual_avg_pct,4.13183,Central-bank policy / supplied proxy,Policy data
+EMU,Euro area,2025,policy_rate_annual_avg_pct,2.4089,Central-bank policy / supplied proxy,Policy data

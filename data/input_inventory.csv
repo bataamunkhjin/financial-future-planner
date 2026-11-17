@@ -1,0 +1,10 @@
+﻿input_file,kind,file_sha256,rows_in_full_world_table,action
+eu deposit int rate.zip,World Bank WDI annual CSV,d05a250c57106bd932e9b47e6e9b36f33440db9fa7a9bc656ce76d615cc1b10c,266,"Deduplicated; extracted MNG, USA, EMU only"
+eu lending int rate.zip,World Bank WDI annual CSV,d863dffe4612d7f5726611ccd760781a8e7529b74433346c2d84af333e474060,266,"Deduplicated; extracted MNG, USA, EMU only"
+mongolian deposit int rate.zip,World Bank WDI annual CSV,d05a250c57106bd932e9b47e6e9b36f33440db9fa7a9bc656ce76d615cc1b10c,266,Identical data content to another ZIP; not double counted
+mongolian lending int rate.zip,World Bank WDI annual CSV,d863dffe4612d7f5726611ccd760781a8e7529b74433346c2d84af333e474060,266,Identical data content to another ZIP; not double counted
+us deposit int rate.zip,World Bank WDI annual CSV,d05a250c57106bd932e9b47e6e9b36f33440db9fa7a9bc656ce76d615cc1b10c,266,Identical data content to another ZIP; not double counted
+us lending int rate.zip,World Bank WDI annual CSV,d863dffe4612d7f5726611ccd760781a8e7529b74433346c2d84af333e474060,266,Identical data content to another ZIP; not double counted
+policy rate us.csv,Dated daily CSV,,,Parsed mm/dd/yyyy; retained numeric daily rate observations
+policy-interest-rate-eu.xlsx,ECB rate decision table,,,Reconstructed years from grouped rows; removed footnote suffixes; selected main refinancing rate
+policy-interest-rate-mongolia.xlsx,Central bank rate decision table,,,Converted Excel serial dates; retained policy rate column

@@ -1,0 +1,79 @@
+﻿region_code,region,year,lending_rate_pct,deposit_rate_pct,policy_rate_annual_avg_pct,policy_rate_year_end_pct,policy_rate_changes_in_year,source_lending,source_deposit,source_policy,period_status
+MNG,Mongolia,2000,36.95269,16.8,,,,WDI FR.INR.LEND,WDI FR.INR.DPST,,Complete calendar year
+MNG,Mongolia,2001,37.35,14.3,,,,WDI FR.INR.LEND,WDI FR.INR.DPST,,Complete calendar year
+MNG,Mongolia,2002,35.51667,13.21667,,,,WDI FR.INR.LEND,WDI FR.INR.DPST,,Complete calendar year
+MNG,Mongolia,2003,31.90667,14.01667,,,,WDI FR.INR.LEND,WDI FR.INR.DPST,,Complete calendar year
+MNG,Mongolia,2004,31.47333,14.15,,,,WDI FR.INR.LEND,WDI FR.INR.DPST,,Complete calendar year
+MNG,Mongolia,2005,30.57083,13.0,,,,WDI FR.INR.LEND,WDI FR.INR.DPST,,Complete calendar year
+MNG,Mongolia,2006,26.93455,13.00667,,,,WDI FR.INR.LEND,WDI FR.INR.DPST,,Complete calendar year
+MNG,Mongolia,2007,21.82833,13.45917,,,,WDI FR.INR.LEND,WDI FR.INR.DPST,,Complete calendar year
+MNG,Mongolia,2008,20.58333,11.39167,9.55792,9.75,3,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2009,21.66696,13.28212,11.31781,10.0,4,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2010,20.06878,11.85898,10.6411,11.0,1,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2011,16.60944,10.47421,11.51849,12.25,3,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2012,18.11381,11.27378,12.99727,13.25,2,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2013,18.48202,12.04569,11.28356,10.5,3,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2014,19.02543,12.31496,11.13288,12.0,1,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2015,19.56272,12.97874,12.96164,13.0,1,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2016,19.74154,13.27167,12.68443,14.0,4,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2017,20.00692,12.95586,12.88493,11.0,2,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2018,17.71427,12.43616,10.31507,11.0,2,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2019,16.99662,10.95765,11.0,11.0,0,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2020,16.93063,10.25702,8.97541,6.0,4,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2021,16.00676,6.59972,6.0,6.0,0,WDI FR.INR.LEND,WDI FR.INR.DPST,BOM policy,Complete calendar year
+MNG,Mongolia,2022,,,9.53425,13.0,5,,,BOM policy,Complete calendar year
+MNG,Mongolia,2023,,,13.0,13.0,0,,,BOM policy,Complete calendar year
+MNG,Mongolia,2024,,,11.27596,10.0,3,,,BOM policy,Complete calendar year
+MNG,Mongolia,2025,,,11.6274,12.0,1,,,BOM policy,Complete calendar year
+USA,United States,2000,9.23333,,6.23743,5.41,240,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2001,6.92167,,3.87836,1.52,238,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2002,4.675,,1.66679,1.16,243,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2003,4.1225,,1.12649,0.94,226,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2004,4.34,,1.35033,1.97,217,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2005,6.18917,,3.21707,4.09,224,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2006,7.9575,,4.96542,5.17,209,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2007,8.05,,5.01732,3.06,223,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2008,5.0875,,1.92418,0.14,233,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2009,3.25,,0.1586,0.05,152,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2010,3.25,,0.17625,0.13,123,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2011,3.25,,0.10151,0.04,94,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2012,3.25,,0.14057,0.09,109,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2013,3.25,,0.10734,0.07,114,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2014,3.25,,0.08849,0.06,65,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2015,3.26,,0.13373,0.2,72,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2016,3.51167,,0.3932,0.55,39,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2017,4.09667,,1.00296,1.33,29,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2018,4.90417,,1.83493,2.4,36,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2019,5.2825,,2.15726,1.55,69,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2020,3.54417,,0.37224,0.09,39,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2021,3.25,,0.07868,0.07,29,WDI FR.INR.LEND,,US supplied daily proxy,Complete calendar year
+USA,United States,2022,,,1.69219,4.33,10,,,US supplied daily proxy,Complete calendar year
+USA,United States,2023,,,5.02586,5.33,16,,,US supplied daily proxy,Complete calendar year
+USA,United States,2024,,,5.14216,4.33,3,,,US supplied daily proxy,Complete calendar year
+USA,United States,2025,,,4.21175,3.64,11,,,US supplied daily proxy,Complete calendar year
+EMU,Euro area,2000,,,4.01844,4.75,6,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2001,,,4.36507,3.25,3,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2002,,,3.21438,2.75,1,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2003,,,2.25822,2.0,2,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2004,,,2.0,2.0,0,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2005,,,2.01781,2.25,1,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2006,,,2.76027,3.5,5,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2007,,,3.83904,4.0,2,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2008,,,3.90027,2.5,4,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2009,,,1.43836,1.25,3,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2010,,,1.25,1.25,0,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2011,,,1.31918,1.0,3,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2012,,,0.88115,0.75,1,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2013,,,0.55342,0.25,2,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2014,,,0.16315,0.05,2,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2015,,,0.05,0.05,0,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2016,,,0.01025,0.0,1,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2017,,,0.0,0.0,0,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2018,,,0.0,0.0,0,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2019,,,0.0,0.0,0,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2020,,,0.0,0.0,0,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2021,,,0.0,0.0,0,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2022,,,0.57877,2.5,4,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2023,,,3.77877,4.5,5,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2024,,,4.13183,3.15,4,,,ECB main refinancing,Complete calendar year
+EMU,Euro area,2025,,,2.4089,2.15,4,,,ECB main refinancing,Complete calendar year

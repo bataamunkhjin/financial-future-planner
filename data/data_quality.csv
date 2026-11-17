@@ -1,0 +1,10 @@
+﻿region,region_code,measure,years_available,window_years,first_year,last_year,missing_years,warning
+Mongolia,MNG,lending_rate_pct,22,26,2000,2021,4,Incomplete historical series; missing years not interpolated
+Mongolia,MNG,deposit_rate_pct,22,26,2000,2021,4,Incomplete historical series; missing years not interpolated
+Mongolia,MNG,policy_rate_annual_avg_pct,18,26,2008,2025,8,Incomplete historical series; missing years not interpolated
+United States,USA,lending_rate_pct,22,26,2000,2021,4,Incomplete historical series; missing years not interpolated
+United States,USA,deposit_rate_pct,0,26,,,26,No observations in supplied files; left missing
+United States,USA,policy_rate_annual_avg_pct,26,26,2000,2025,0,Complete 2000-2025
+Euro area,EMU,lending_rate_pct,0,26,,,26,No observations in supplied files; left missing
+Euro area,EMU,deposit_rate_pct,0,26,,,26,No observations in supplied files; left missing
+Euro area,EMU,policy_rate_annual_avg_pct,26,26,2000,2025,0,Complete 2000-2025
