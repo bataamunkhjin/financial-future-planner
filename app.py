@@ -1,6 +1,6 @@
-"""Financial Future Planner v6.3 — clarity-first Streamlit interface.
+"""Financial Future Planner v6.5 — accessible, readable typography.
 
-Two planners and all financial computations are retained from v6.2.
+Two planners and all financial computations are retained from v6.4.
 Currency labels do not convert money. All projections are hypothetical.
 """
 from __future__ import annotations
@@ -50,56 +50,76 @@ html,body,[data-testid="stAppViewContainer"],.stApp {
 section[data-testid="stSidebar"] {background:#EAF1F3!important;border-right:1px solid var(--fp-border);}
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {color:#5B7182!important;}
 [data-testid="stVerticalBlockBorderWrapper"] > div {border-color:var(--fp-border)!important;}
+/* Accessible UI text sizes: readable labels, tabs, controls, captions and buttons. */
+html {font-size:16px;}
+[data-testid="stCaptionContainer"] p,
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+  font-size:.94rem!important;line-height:1.55!important;color:#536B7C!important;
+}
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input,
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stSelectbox"] [data-baseweb="select"] span {
+  font-size:1.04rem!important;color:var(--fp-text)!important;
+}
+[data-testid="stButton"] button,
+[data-testid="stDownloadButton"] button,
+[data-testid="stFormSubmitButton"] button {font-size:1rem!important;min-height:42px;}
+[data-testid="stButton"] button p,
+[data-testid="stDownloadButton"] button p,
+[data-testid="stFormSubmitButton"] button p {font-size:1rem!important;}
+[data-testid="stExpander"] summary p {font-size:1rem!important;}
 /* High-contrast labels and calm input outlines. Do not override native focus handling. */
-[data-testid="stWidgetLabel"] p {font-size:.88rem!important;font-weight:600!important;color:#28445A!important;}
+[data-testid="stWidgetLabel"] p {font-size:1rem!important;font-weight:650!important;color:#28445A!important;}
 [data-testid="stMetric"] {background:#FFFFFF;border:1px solid var(--fp-border);border-radius:14px;padding:14px;min-width:0;}
-[data-testid="stMetricLabel"] p {font-size:.80rem!important;color:#596E7E!important;}
-[data-testid="stMetricValue"] {font-size:1.33rem!important;letter-spacing:-.035em;overflow-wrap:anywhere;color:#183247!important;}
-[data-testid="stMetricDelta"] {font-size:.80rem!important;}
+[data-testid="stMetricLabel"] p {font-size:.95rem!important;color:#526A7A!important;}
+[data-testid="stMetricValue"] {font-size:clamp(1.4rem,2.1vw,1.8rem)!important;line-height:1.22!important;letter-spacing:-.025em;overflow-wrap:anywhere;color:#183247!important;}
+[data-testid="stMetricDelta"] {font-size:.95rem!important;}
 [data-testid="stTabs"] [data-baseweb="tab-list"] {gap:8px;border-bottom:1px solid var(--fp-border);}
 [data-testid="stTabs"] [data-baseweb="tab-list"] button {
-  color:#52697C;padding:10px 18px;border-radius:9px 9px 0 0;font-weight:700;
+  color:#425B70;padding:13px 20px;border-radius:9px 9px 0 0;font-size:1.03rem!important;font-weight:700;
 }
 [data-testid="stTabs"] [data-baseweb="tab-list"] button[aria-selected="true"] {
   color:#116D65!important;border-bottom:2px solid #167C75;background:#E5F2EF;
 }
 [data-testid="stDownloadButton"] button {border-radius:9px!important;border:1px solid #97C6BE!important;}
 [data-testid="stExpander"] {border-color:var(--fp-border)!important;border-radius:12px!important;}
-[data-testid="stExpander"] summary {font-weight:650;}
-[data-testid="stMarkdownContainer"] p {line-height:1.6;}
+[data-testid="stExpander"] summary {font-weight:650;font-size:1rem!important;}
+[data-testid="stMarkdownContainer"] p {font-size:1rem;line-height:1.65;}
 .fp-header {display:flex;align-items:center;justify-content:space-between;gap:24px;
  background:#FFFFFF;border:1px solid var(--fp-border);border-radius:15px;padding:20px 23px;
  margin-bottom:18px;box-shadow:0 4px 18px rgba(30,62,83,.04);}
-.fp-kicker {font-size:.72rem;text-transform:uppercase;letter-spacing:.11em;color:#126D65;font-weight:800;margin-bottom:5px;}
-.fp-header h1 {font-size:clamp(1.5rem,2.3vw,2rem);line-height:1.18;margin:0 0 7px;letter-spacing:-.035em;color:#183247;}
-.fp-header p {margin:0;color:#5A7181;font-size:.89rem;}
+.fp-kicker {font-size:.84rem;text-transform:uppercase;letter-spacing:.10em;color:#126D65;font-weight:800;margin-bottom:5px;}
+.fp-header h1 {font-size:clamp(1.85rem,2.5vw,2.25rem);line-height:1.2;margin:0 0 7px;letter-spacing:-.035em;color:#183247;}
+.fp-header p {margin:0;color:#5A7181;font-size:1rem;}
 .fp-brand {display:flex;align-items:center;gap:11px;flex-shrink:0;}
 .fp-logo {display:flex;align-items:center;justify-content:center;width:48px;height:55px;
  background:#F4F6FA;border:1px solid #DFE6EC;border-radius:9px;padding:4px;}
 .fp-logo img {width:39px;height:47px;object-fit:contain;}
-.fp-brand-name {font-size:.78rem;font-weight:760;line-height:1.4;color:#183247;}
-.fp-brand-name span {display:block;color:#98702F;font-size:.71rem;}
+.fp-brand-name {font-size:.94rem;font-weight:760;line-height:1.4;color:#183247;}
+.fp-brand-name span {display:block;color:#98702F;font-size:.84rem;}
 .fp-section {margin:24px 0 10px;}
-.fp-section h2 {font-size:1.25rem;margin:0 0 4px;font-weight:760;letter-spacing:-.02em;color:#183247;}
-.fp-section p {font-size:.87rem;line-height:1.55;color:#617586;margin:0;}
-.fp-intro {color:#617586;font-size:.89rem;margin-bottom:16px;}
+.fp-section h2 {font-size:1.48rem;margin:0 0 5px;font-weight:760;letter-spacing:-.02em;color:#183247;}
+.fp-section p {font-size:1rem;line-height:1.55;color:#617586;margin:0;}
+.fp-intro {color:#617586;font-size:1rem;margin-bottom:18px;}
 .fp-answer {background:#EAF6F2;border:1px solid #BCDAD1;border-left:4px solid #167C75;
  border-radius:12px;padding:17px 20px;margin:14px 0 16px;}
 .fp-answer.caution {background:#FFF7EA;border-color:#E9D1AD;border-left-color:#B77C38;}
-.fp-answer .fp-answer-label {color:#446D67;text-transform:uppercase;letter-spacing:.07em;font-size:.72rem;font-weight:800;}
+.fp-answer .fp-answer-label {color:#446D67;text-transform:uppercase;letter-spacing:.07em;font-size:.84rem;font-weight:800;}
 .fp-answer.caution .fp-answer-label {color:#805B30;}
-.fp-answer .fp-answer-title {font-size:1.17rem;font-weight:800;color:#16394A;margin:5px 0;}
-.fp-answer .fp-answer-sub {font-size:.83rem;color:#3D5D67;line-height:1.55;}
+.fp-answer .fp-answer-title {font-size:1.4rem;font-weight:800;color:#16394A;margin:5px 0;}
+.fp-answer .fp-answer-sub {font-size:1rem;color:#3D5D67;line-height:1.55;}
 .fp-note {background:#F0F5F7;border:1px solid var(--fp-border);color:#4E6575;
- padding:12px 16px;border-radius:11px;font-size:.83rem;line-height:1.55;margin:10px 0 16px;}
+ padding:12px 16px;border-radius:11px;font-size:.98rem;line-height:1.6;margin:10px 0 16px;}
 .fp-metric-row {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:10px 0 18px;}
 .fp-card {background:#FFFFFF;border:1px solid var(--fp-border);border-radius:13px;padding:15px 15px 13px;
  min-height:114px;box-shadow:0 2px 8px rgba(30,62,83,.025);}
-.fp-card .label {font-size:.81rem;line-height:1.4;color:#536C7C;}
-.fp-card .value {font-size:clamp(1.03rem,1.6vw,1.44rem);font-weight:800;color:#16394A;
+.fp-card .label {font-size:.96rem;line-height:1.45;color:#536C7C;}
+.fp-card .value {font-size:clamp(1.27rem,1.85vw,1.65rem);font-weight:800;color:#16394A;
  margin:10px 0 5px;line-height:1.14;letter-spacing:-.032em;overflow-wrap:anywhere;}
-.fp-card .detail {font-size:.73rem;color:#627989;line-height:1.4;}
-.fp-chart-note {font-size:.77rem;color:#5B7182;margin-top:-8px;}
+.fp-card .detail {font-size:.9rem;color:#586F80;line-height:1.4;}
+.fp-chart-note {font-size:.94rem;color:#526B7B;margin-top:-8px;}
 .fp-divider {height:1px;background:var(--fp-border);margin:28px 0 12px;}
 @media(max-width:960px){.block-container {padding:1.3rem 1.2rem 3.6rem;}
  .fp-metric-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
@@ -107,6 +127,14 @@ section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {color:#5B
  .fp-logo{width:40px;height:47px}.fp-logo img{width:32px;height:40px;}
  .fp-metric-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
  .fp-card{min-height:110px;padding:11px;}}
+/* At phone widths, preserve tap targets and avoid oversized KPI wrapping. */
+@media(max-width:700px) {
+ [data-testid="stTabs"] [data-baseweb="tab-list"] button {
+   font-size:1rem!important;padding:11px 12px!important;
+ }
+ .fp-header h1 {font-size:1.8rem;}
+ .fp-card .value {font-size:1.36rem;}
+}
 </style>''', unsafe_allow_html=True)
 
 # Currency controls are labels and regional planning assumptions, NOT FX conversions.
@@ -206,21 +234,21 @@ def answer(label: str, title: str, explanation: str, caution: bool = False) -> N
                 f'<div class="fp-answer-title">{escape(title)}</div>'
                 f'<div class="fp-answer-sub">{escape(explanation)}</div></div>', unsafe_allow_html=True)
 
-def chart(fig: go.Figure, *, x_label: str = "", y_label: str = "", height: int = 350) -> None:
+def chart(fig: go.Figure, *, x_label: str = "", y_label: str = "", height: int = 390) -> None:
     fig.update_layout(
         template="plotly_white", height=height,
-        margin=dict(l=42, r=17, t=66, b=58),
+        margin=dict(l=55, r=22, t=82, b=66),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#28475B"),
+        font=dict(family="Inter, Segoe UI, sans-serif", size=14, color="#28475B"),
         colorway=["#167C75", "#557FA8", "#B77C38", "#8B74B1"],
-        legend=dict(orientation="h", y=1.13, x=0, bgcolor="rgba(0,0,0,0)", font=dict(size=11)),
-        hovermode="x unified", hoverlabel=dict(bgcolor="#FFFFFF",font_size=12,font_color="#183247",bordercolor="#D9E3E7"),
+        legend=dict(orientation="h", y=1.16, x=0, bgcolor="rgba(0,0,0,0)", font=dict(size=13)),
+        hovermode="x unified", hoverlabel=dict(bgcolor="#FFFFFF",font_size=14,font_color="#183247",bordercolor="#D9E3E7"),
     )
     fig.update_xaxes(title=x_label, showgrid=False, zeroline=False,
-                     title_font=dict(size=11,color="#567184"), linecolor="#CAD7DE")
+                     title_font=dict(size=13,color="#526B7B"), tickfont=dict(size=13), linecolor="#CAD7DE")
     fig.update_yaxes(title=y_label, gridcolor="rgba(58,93,110,.12)",
                      zeroline=False, separatethousands=True,
-                     title_font=dict(size=11,color="#567184"))
+                     title_font=dict(size=13,color="#526B7B"), tickfont=dict(size=13))
     st.plotly_chart(fig, use_container_width=True, theme=None,
                     config={"displayModeBar":False,"scrollZoom":False,"responsive":True})
 
