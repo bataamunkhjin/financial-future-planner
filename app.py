@@ -407,6 +407,55 @@ def render_chart(fig: go.Figure, **kwargs) -> None:
         st.plotly_chart(fig, use_container_width=True, **chart_options, **kwargs)
 
 
+
+def monte_carlo_fan_chart(
+    fan: pd.DataFrame, projection: pd.DataFrame, retirement_age: int,
+    currency: str,
+) -> go.Figure:
+    """Show Monte Carlo percentile envelopes and the fixed-return projection.
+
+    These are simulated portfolio balances in today's purchasing power;
+    percentile bands are distributions at each age, not individual paths.
+    """
+    ages = fan["Age"]
+    figure = go.Figure()
+    figure.add_trace(go.Scatter(
+        x=ages, y=fan["P10"], mode="lines", line=dict(width=0),
+        showlegend=False, hoverinfo="skip", name="10th percentile",
+    ))
+    figure.add_trace(go.Scatter(
+        x=ages, y=fan["P90"], mode="lines", line=dict(width=0),
+        fill="tonexty", fillcolor="rgba(103, 146, 205, 0.18)",
+        name="10th–90th percentile", hovertemplate="Age %{x}<br>90th percentile: %{y:,.0f}<extra></extra>",
+    ))
+    figure.add_trace(go.Scatter(
+        x=ages, y=fan["P25"], mode="lines", line=dict(width=0),
+        showlegend=False, hoverinfo="skip", name="25th percentile",
+    ))
+    figure.add_trace(go.Scatter(
+        x=ages, y=fan["P75"], mode="lines", line=dict(width=0),
+        fill="tonexty", fillcolor="rgba(78, 200, 184, 0.22)",
+        name="25th–75th percentile", hovertemplate="Age %{x}<br>75th percentile: %{y:,.0f}<extra></extra>",
+    ))
+    figure.add_trace(go.Scatter(
+        x=ages, y=fan["Median"], mode="lines", name="Simulation median",
+        line=dict(color="#45D3C3", width=3),
+        hovertemplate="Age %{x}<br>Median: %{y:,.0f}<extra></extra>",
+    ))
+    figure.add_trace(go.Scatter(
+        x=projection["Age"], y=projection["Balance (today's money)"],
+        mode="lines", name="Constant-return projection",
+        line=dict(color="#E5BA69", width=2.5, dash="dash"),
+        hovertemplate="Age %{x}<br>Fixed return: %{y:,.0f}<extra></extra>",
+    ))
+    figure.add_vline(
+        x=int(retirement_age), line_color="rgba(204,222,237,0.60)",
+        line_width=1.3, line_dash="dot",
+    )
+    figure.update_xaxes(title="Age", range=[int(ages.iloc[0]), int(ages.iloc[-1])])
+    return plot_layout(figure, height=455, y_label=f"Portfolio in today's money ({currency})")
+
+
 def paged_table(data: pd.DataFrame, *, key: str, formats: dict | None = None,
                 page_size: int = 10) -> None:
     """Show long results page-by-page so tables don't create another scrollbar.
@@ -1129,6 +1178,30 @@ with retirement_tab:
             "The 80% goal is an illustrative planning threshold, not a recommended risk tolerance. "
             "Success depends on the assumed market return distribution, constant inflation, and selected planning age."
         )
+
+    st.markdown("#### Monte Carlo simulation")
+    st.caption(
+        "Explore a range of possible retirement balances when investment returns change "
+        "from year to year. All values use today's purchasing power."
+    )
+    mc_col1, mc_col2 = st.columns(2)
+    mc_col1.metric(
+        f"Scenarios funding spending through age {planning_age}",
+        f"{simulation['sustain_probability']:.1%}",
+    )
+    mc_col2.metric(
+        "Median simulated portfolio at retirement",
+        money(simulation["median_at_retirement"]),
+    )
+    render_chart(monte_carlo_fan_chart(fan, projection, int(retirement_age), CURRENCY))
+    st.caption(
+        f"{int(simulations):,} simulated return paths · assumed nominal return "
+        f"{expected_return:.1f}% · volatility {volatility:.1f}% · fixed inflation {inflation:.1f}%. "
+        "Shaded ranges show the 10th–90th and 25th–75th percentiles at each age. "
+        "They are not confidence intervals or guaranteed outcomes. The dotted vertical line "
+        "marks retirement. The dashed line assumes the same fixed return every year. "
+        "The success rate measures whether every monthly withdrawal is funded through the planning age."
+    )
 
     st.markdown("#### Retirement Life Simulator")
     st.caption(
