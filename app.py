@@ -1,4 +1,4 @@
-"""Financial Future Planner v7.1 — smarter charts, growing savings, clearer reports.
+"""Financial Future Planner v7.2 — historical rate decision simulators.
 
 Two planners retain their core functionality. Currency labels are not FX conversions.
 All simulations and forecasts are hypothetical educational illustrations.
@@ -27,8 +27,8 @@ from finance import (
     mortgage_investing_return_scenarios,
 )
 from report import generate_pdf_report
-from historical_data import (METRIC_LABELS, annual_rates, region_rows, observed_rates,
-                             rate_summary, quality_report, sources)
+from historical_data import (scenario_source, consecutive_windows, scenario_rate_path,
+                             simulate_loan_rate_replay, simulate_savings_rate_replay)
 
 st.set_page_config(
     page_title="Financial Future Planner", page_icon="F", layout="wide",
@@ -360,59 +360,66 @@ with loan_tab:
         st.caption(f"Principal is the amount borrowed ({money(loan_amount)}). The remaining "
                    f"{money(chosen_stats['interest'])} is interest paid with the extra-payment strategy.")
 
-    with st.expander("Historical interest rates (uploaded dataset)"):
-        st.caption("Use observed annual rates to examine past borrowing conditions. Uploaded World Bank "
-                   "lending and deposit series end in 2021 for the available countries; newer policy "
-                   "rates are NOT equivalent to consumer loan or savings rates.")
-        historic_region=region_rows(CURRENCY_CODE)
-        history_choices=[name for name in ["lending_rate_pct", "deposit_rate_pct", "policy_rate_annual_avg_pct"]
-                         if historic_region[name].notna().any()]
-        if history_choices:
-            metric=st.selectbox("Which historical rate?", history_choices,
-                                format_func=lambda x: METRIC_LABELS[x], key="loan_history_metric_"+CURRENCY_CODE)
-            series=observed_rates(CURRENCY_CODE,metric)
-            summary=rate_summary(CURRENCY_CODE,metric)
-            if summary is not None:
-                cards([
-                    ("Latest available", f"{summary['latest']:.2f}%", f"Observed in {summary['last_year']}"),
-                    ("Historical average", f"{summary['average']:.2f}%", "2010 onward, observed years only"),
-                    ("Lowest recorded", f"{summary['minimum']:.2f}%", "2010 onward"),
-                    ("Highest recorded", f"{summary['maximum']:.2f}%", "2010 onward"),
-                ])
-                fig_h=go.Figure()
-                fig_h.add_trace(go.Scatter(x=series['year'],y=series[metric],
-                    mode="lines+markers",name=METRIC_LABELS[metric],line=dict(color="#167C75",width=3)))
-                chart(fig_h,x_label="Observation year",y_label="Annual rate (%)",height=315)
-                st.caption(f"{len(series)} observed annual values, {int(series.year.min())}–{int(series.year.max())}. "
-                           "Missing years are not imputed. Historical averages are not forecasts.")
-                if metric == 'lending_rate_pct':
-                    selected_year=st.selectbox("Compare loan repayment with observed year",series['year'].iloc[::-1].astype(int).tolist(),
-                                               key="historic_loan_year_"+CURRENCY_CODE)
-                    observed=float(series.loc[series.year==selected_year,metric].iloc[0])
-                    past_payment=loan_payment(loan_amount,observed,loan_years)
-                    st.metric("Monthly payment at the historical rate",money(past_payment,2),
-                              delta=f"{past_payment-scheduled_payment:+,.2f} {CURRENCY} versus your chosen rate")
-                    st.caption("Hypothetical new loan at the observed annual lending benchmark, "
-                               "with your entered principal and term. This is not a bank quote or historical loan offer.")
-                else:
-                    st.info("This series is shown for historical context, not used as a personal loan APR.")
+    with st.expander("Loan rate stress test — replay past rate changes", expanded=False):
+        st.caption("What if a hypothetical VARIABLE-rate loan repriced each year as rates moved in a "
+                   "past period? Your fixed-rate loan comparison always uses the interest rate above.")
+        rate_history,loan_basis=scenario_source(CURRENCY_CODE,"loan")
+        lp1,lp2=st.columns(2,gap="large")
+        with lp1:
+            loan_window_years=st.selectbox("Historical period length (years)",[3,5,10],
+                                            index=1,key=f"loan_stress_length_{CURRENCY_CODE}")
+        loan_periods=consecutive_windows(rate_history,loan_window_years)
+        with lp2:
+            loan_period_label=st.selectbox("Replay which historical period?",
+                [f"{a}–{b}" for a,b in loan_periods],key=f"loan_stress_period_{CURRENCY_CODE}")
+        loan_period_start,loan_period_end=loan_periods[[f"{a}–{b}" for a,b in loan_periods].index(loan_period_label)]
+        if loan_basis=="retail":
+            st.caption("Uses recorded World Bank lending-rate CHANGES (percentage-point movements), "
+                       "applied to your entered loan APR. Historical rate levels are not substituted for a bank quote.")
+            loan_pass_through=100
         else:
-            st.warning("No annual historical interest-rate observations are available for this region.")
-        cross=st.checkbox("Compare central-bank policy benchmarks across regions",key="cross_country_policy_"+CURRENCY_CODE)
-        if cross:
-            compare=annual_rates().dropna(subset=['policy_rate_annual_avg_pct'])
-            fig=go.Figure()
-            for country,color in [("Mongolia","#167C75"),("United States","#557FA8"),("Euro area","#B77C38")]:
-                d=compare.loc[compare.region==country]
-                fig.add_trace(go.Scatter(x=d.year,y=d.policy_rate_annual_avg_pct,
-                    name=country,mode="lines",line=dict(color=color,width=2.6)))
-            chart(fig,x_label="Year",y_label="Policy rate or rate proxy (%)",height=345)
-            st.caption("Different central-bank series and definitions; useful as context, NOT direct retail-rate comparisons. "
-                       "U.S. supplied CSV does not identify its exact benchmark.")
-        download_csv("Download combined historical rates CSV",annual_rates(),"historical_rates_annual.csv")
-        with st.expander("Data sources and missing-data notes"):
-            st.dataframe(quality_report(),hide_index=True,use_container_width=True)
-            st.dataframe(sources(),hide_index=True,use_container_width=True)
+            st.info("No historical consumer lending-rate observations were supplied for this region. "
+                    "This is an assumed stress scenario based on policy-rate CHANGES, "
+                    "not actual loan APR changes. " +
+                    ("The exact definition of your uploaded U.S. daily rate series is unverified."
+                     if CURRENCY_CODE=="USD" else ""))
+            loan_pass_through=st.slider("Assumed loan response to policy-rate changes (%)",
+                                       min_value=0,max_value=100,value=50,step=10,
+                                       key=f"loan_policy_response_{CURRENCY_CODE}")
+        loan_path=scenario_rate_path(rate_history,loan_period_start,loan_period_end,
+                                    interest_rate,observed_levels=False,
+                                    pass_through_pct=loan_pass_through)
+        loan_stress=simulate_loan_rate_replay(loan_amount,interest_rate,int(loan_years),extra_monthly,loan_path)
+        first_max=max(loan_stress['fixed_payment'],loan_stress['peak_required_payment'])
+        answer("HISTORICAL LOAN STRESS RESULT",f"Peak required payment: {money(loan_stress['peak_required_payment'],2)} / month",
+               f"Compared with {money(loan_stress['fixed_payment'],2)} at your fixed interest rate. "
+               f"Comparison covers the first {loan_stress['months_compared']} months; "
+               "monthly extra payments are modeled in both scenarios.",
+               caution=loan_stress['peak_required_payment']>loan_stress['fixed_payment']*1.05)
+        cards([
+            ("Peak payment change",money(loan_stress['peak_required_payment']-loan_stress['fixed_payment'],2),
+             "Versus fixed required payment"),
+            ("Interest difference",money(loan_stress['interest_difference']),
+             "Changing-rate minus fixed-rate interest"),
+            ("Stress-test balance",money(loan_stress['scenario_balance']),"Debt remaining at period end"),
+            ("Fixed-rate balance",money(loan_stress['fixed_balance']),"Same period, with same extra payments"),
+        ])
+        loan_interest_move=loan_stress['interest_difference']
+        if loan_interest_move>1:
+            st.info(f"In this replay, repricing increases interest paid by approximately "
+                    f"{money(abs(loan_interest_move))} over the comparison period.")
+        elif loan_interest_move<-1:
+            st.info(f"In this replay, repricing decreases interest paid by approximately "
+                    f"{money(abs(loan_interest_move))} over the comparison period.")
+        else:
+            st.info("This rate path makes almost no difference to interest over the comparison period.")
+        st.caption("Historical years provide the sequence of annual rate MOVEMENTS; the simulation "
+                   "starts today at your chosen rate. A fixed-rate contract would not reprice this way. "
+                   "This is a rate-risk illustration, not a forecast or lender offer.")
+        with st.expander("How the stress test changes your loan, year by year"):
+            st.dataframe(loan_stress['yearly'],hide_index=True,use_container_width=True)
+            download_csv("Download loan rate stress test CSV",loan_stress['yearly'],
+                         "loan_historical_rate_stress.csv")
 
     extra_scenarios=annual_loan_scenario(loan_amount,interest_rate,loan_years,extra_monthly,loan_start)
     rate_scenarios=loan_rate_scenarios(loan_amount,interest_rate,loan_years,extra_monthly,loan_start)
@@ -454,6 +461,9 @@ with loan_tab:
         (f"Paying {money(extra_monthly)} in extra principal each month saves about "
          f"{money(saved_interest)} in total interest." if extra_monthly>0 else
          "An extra principal payment would shorten your repayment period; try a small extra amount above."),
+        (f"Historical annual repricing stress test ({loan_period_label}): highest required payment "
+         f"{money(loan_stress['peak_required_payment'])} versus fixed {money(loan_stress['fixed_payment'])}; "
+         "rate changes were replayed as a hypothetical variable-rate scenario."),
         f"Without extra payments, total lifetime interest is {money(standard_stats['interest'])}.",
         "Loan calculations assume a constant interest rate and no lender fees or prepayment penalties.",
     ]
@@ -680,27 +690,75 @@ with retirement_tab:
         chart(purchasing,x_label="Age",y_label=f"Monthly spending ({CURRENCY})",height=340)
         download_csv("Download inflation projection CSV",inflation_table,"inflation_projection.csv")
 
-    with st.expander("Historical deposit and policy rates"):
-        history_deposit=observed_rates(CURRENCY_CODE,"deposit_rate_pct")
-        history_policy=observed_rates(CURRENCY_CODE,"policy_rate_annual_avg_pct")
-        historical_fig=go.Figure()
-        if not history_deposit.empty:
-            historical_fig.add_trace(go.Scatter(x=history_deposit.year,y=history_deposit.deposit_rate_pct,
-                mode="lines+markers",name="Observed deposit rate",line=dict(color="#167C75",width=3)))
-            deposit_info=rate_summary(CURRENCY_CODE,"deposit_rate_pct")
-            st.caption(f"Latest observed World Bank deposit rate: {deposit_info['latest']:.2f}% "
-                       f"({deposit_info['last_year']}). Your editable bank-rate assumption is {bank_deposit_rate:.2f}%.")
+    with st.expander("Savings rate stress test — replay past rate changes", expanded=False):
+        st.caption("If you put money into a bank savings account for several years, how much "
+                   "might changing interest rates matter? Compare a steady deposit rate with a "
+                   "scenario derived from your uploaded historical data.")
+        savings_history,savings_basis=scenario_source(CURRENCY_CODE,"savings")
+        sp1,sp2=st.columns(2,gap="large")
+        with sp1:
+            savings_window_years=st.selectbox("Savings stress period (years)",[3,5,10],index=1,
+                                               key=f"savings_stress_length_{CURRENCY_CODE}")
+        savings_periods=consecutive_windows(savings_history,savings_window_years)
+        with sp2:
+            savings_period_label=st.selectbox("Replay which historical period?",
+                [f"{a}–{b}" for a,b in savings_periods],key=f"savings_stress_period_{CURRENCY_CODE}")
+        savings_period_start,savings_period_end=savings_periods[
+            [f"{a}–{b}" for a,b in savings_periods].index(savings_period_label)]
+        if savings_basis=="retail":
+            st.caption("The changing-rate scenario uses the OBSERVED annual bank deposit-rate "
+                       "benchmarks for the selected years, not current bank offers.")
+            savings_levels=True
+            savings_response=100
         else:
-            st.warning("No retail deposit-rate observations for this region were present in your uploaded World Bank files.")
-        if not history_policy.empty:
-            historical_fig.add_trace(go.Scatter(x=history_policy.year,y=history_policy.policy_rate_annual_avg_pct,
-                mode="lines",name="Policy rate / supplied proxy",line=dict(color="#557FA8",width=2,dash="dash")))
-        chart(historical_fig,x_label="Year",y_label="Interest rate (%)",height=320)
-        st.caption("Deposit rates and policy rates refer to different financial products. "
-                   "They are not interchangeable. Your inflation forecast remains an editable assumption: "
-                   "no historical inflation observations were provided with these uploaded files.")
-        download_csv("Download historical interest-rate CSV",region_rows(CURRENCY_CODE),
-                     f"historical_rates_{CURRENCY_CODE}.csv")
+            st.info("Your uploaded files have no historical bank deposit rates for this region. "
+                    "The test uses changes in a policy-rate series as hypothetical movements "
+                    "around YOUR editable bank deposit rate. These are NOT observed savings rates. " +
+                    ("The exact definition of the uploaded U.S. daily rate series is unverified."
+                     if CURRENCY_CODE=="USD" else ""))
+            savings_levels=False
+            savings_response=st.slider("Assumed deposit-rate response to policy movements (%)",
+                                       min_value=0,max_value=100,value=50,step=10,
+                                       key=f"savings_policy_response_{CURRENCY_CODE}")
+        savings_path=scenario_rate_path(savings_history,savings_period_start,savings_period_end,
+                                      bank_deposit_rate,observed_levels=savings_levels,
+                                      pass_through_pct=savings_response)
+        savings_stress=simulate_savings_rate_replay(
+            retirement_savings,retirement_contribution,bank_deposit_rate,inflation,
+            annual_savings_increase,savings_path)
+        answer("HISTORICAL SAVINGS STRESS RESULT",
+               f"{money(savings_stress['scenario_balance'])} after {savings_stress['years']} years",
+               f"Compared with {money(savings_stress['steady_balance'])} if your bank rate "
+               f"remained at {bank_deposit_rate:.2f}%. Both figures use today's purchasing power.",
+               caution=savings_stress['difference'] < 0)
+        cards([
+            ("Difference from steady rate",money(savings_stress['difference']),"Changing minus steady outcome"),
+            ("Total added savings",money(savings_stress['contributions']),"Deposits in today's money"),
+            ("Spending coverage",f"{savings_stress['scenario_balance']/target_income:.1f} months",
+             "At your chosen monthly spending level"),
+            ("Steady bank-rate scenario",f"{bank_deposit_rate:.2f}%","Your editable annual rate"),
+        ])
+        difference_savings=savings_stress['difference']
+        if difference_savings>1:
+            st.info(f"In this replay, changing bank rates produce about "
+                    f"{money(abs(difference_savings))} MORE purchasing-power savings "
+                    "than keeping your deposit rate constant.")
+        elif difference_savings<-1:
+            st.info(f"In this replay, changing bank rates produce about "
+                    f"{money(abs(difference_savings))} LESS purchasing-power savings "
+                    "than keeping your deposit rate constant.")
+        else:
+            st.info("This rate path produces almost the same result as the steady bank rate.")
+        st.caption(f"This standalone {savings_stress['years']}-year bank savings test continues monthly "
+                   "deposits for the entire period, independent of the selected retirement age. "
+                   f"It is NOT your full retirement projection or Monte Carlo investment result. "
+                   f"Returns are adjusted using your constant {inflation:.1f}% inflation assumption, "
+                   "NOT historical inflation; no tax, fees, or account restrictions. "
+                   "Historical periods are illustrative scenarios, not forecasts.")
+        with st.expander("See year-by-year bank savings simulation"):
+            st.dataframe(savings_stress['yearly'],hide_index=True,use_container_width=True)
+            download_csv("Download savings rate stress test CSV",savings_stress['yearly'],
+                         "savings_historical_rate_stress.csv")
 
     # Inflation shock is modeled even if its detail expander is closed so PDF stays accurate.
     with st.expander("Inflation shock simulator"):
@@ -742,6 +800,9 @@ with retirement_tab:
          else f"With current spending, steady-return savings run short near age {depletion_age:.1f}."),
         f"Modeled monthly saving required: {money(needed_per_month)}; extra above current saving: {money(additional_saving)}.",
         f"{simulation['sustain_probability']:.1%} of {simulations} simulated paths fund every withdrawal through age {planning_age}.",
+        (f"Bank savings stress test ({savings_period_label}): estimated {money(savings_stress['scenario_balance'])} "
+         f"after {savings_stress['years']} years versus {money(savings_stress['steady_balance'])} "
+         "under a steady deposit rate; this is NOT the investment portfolio projection."),
         f"Savings deposits increase {annual_savings_increase:.1f}% yearly above inflation "
         f"(monthly contribution in the last saving year: {money(last_year_contribution)}).",
         "Results assume no pensions, taxes, investment fees, or flexible spending; all savings and spending use today's money.",
