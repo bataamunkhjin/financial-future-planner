@@ -1,92 +1,72 @@
-# Financial Future Planner v3
+# Financial Future Planner v7.1 — Historical Rate Data
 
-A GitHub-ready two-tab Streamlit app for a finance class and personal portfolio. **Four required loan inputs + five required retirement inputs**; all other settings are optional and tucked inside expandable sections. No sign-in, bank connection, API key, or paid service.
+**Munkhjin Bataa | American University of Mongolia**
 
-## What the app does
+Two-tab Streamlit app: **Loan Planner** and **Retirement Planner**. Version 7.1 adds a documented, offline historical interest-rate dataset cleaned from nine files supplied for the class project. No internet connection or API key is required.
 
-### Mortgage / Loan Planner
-- Calculates fixed-rate monthly payment, scheduled versus accelerated payoff, total interest, and detailed amortization tables.
-- Generates automatic extra-payment and loan-rate what-if scenarios; rate changes are **hypothetical new-loan quotes**, not repricing an existing fixed loan.
-- **New in v3:** Shows the payment month/date at which **25%, 50%, 75%, and 100%** of the original principal has been repaid.
-- Compares prepaying the mortgage with investing spare cash, using the **same monthly budget and loan maturity** for both strategies.
-- **New in v3:** Fixed-return investment stress tests (0%, assumed -3 percentage points, assumed return, assumed +3 points, mortgage break-even return).
-- Charts, insights, CSV schedule downloads, and a PDF summary.
+## What changed
 
-### Retirement Planner
-- Models saving and retirement spending in **today's purchasing power**.
-- Calculates projected portfolio, 4%-rule-style target with editable initial withdrawal rate, surplus or shortfall, and needed monthly contribution.
-- Finds earliest *modeled* eligible retirement age, checks both a withdrawal-rule target and a deterministic spending requirement; not a retirement guarantee.
-- Monte Carlo fan chart and separate probabilities for reaching the portfolio target and sustaining monthly spending through the planning age.
-- **New in v3:** Estimates real monthly contributions required to reach the initial withdrawal-rule portfolio target in **approximately 80% of illustrative simulated return paths**, reusing existing inputs. This is **not** 80% probability of sustaining retirement spending.
-- Auto what-if comparisons, downloadable CSVs, and PDF reporting.
+- Under **Loan Planner → Historical interest rates (uploaded dataset)**, explore available annual lending, deposit and central-bank policy rates. The observed lending-rate series can be used to compare a hypothetical loan payment against your chosen loan rate (same principal and term).
+- Under **Retirement Planner → Historical deposit and policy rates**, see deposit-rate history where it exists and policy-rate history, alongside the app's current editable bank deposit assumption.
+- Both sections include clearly labeled plots, available-year counts, downloads and source/coverage notes. The Loan Planner offers an optional three-region policy-rate comparison.
+- Existing user-entered rates, the two main tabs, loan amortization, Monte Carlo, inflation shock, contribution growth, charts and PDF reports are **unchanged**.
 
-### Classroom-friendly additions
-- **New in v3:** Expandable **“Understand the calculations”** sections in each tab, explaining loan amortization, the real-return formula, and Monte Carlo simulation.
-- **New in v3:** `TEACHER_GUIDE.md` includes a four-minute live demonstration and explanation of every source file.
-- **New in v3:** `.github/workflows/tests.yml` automatically runs finance tests after commits/PRs when enabled on GitHub Actions.
-- Combined PDF includes all new results and works offline without custom font files or paid services.
+## Source data and cleaning
 
-## Project files
+Six ZIPs are **duplicate regional downloads** of two complete World Bank World Development Indicators (WDI) worldwide datasets, rather than six distinct country-level datasets:
 
-```text
-app.py                         Streamlit UI and charts
-finance.py                     Independent finance calculations
-report.py                      PDF generator
-requirements.txt               Packages installed by Streamlit Cloud
-README.md                      Project overview and setup
-TEACHER_GUIDE.md               Presentation walkthrough and formulas
-.streamlit/config.toml         Theme settings
-.github/workflows/tests.yml    GitHub Actions test workflow
-tests/test_finance.py          Loan and retirement baseline tests
-tests/test_features.py         v2 scenarios and report tests
-tests/test_v3.py               New v3 feature tests
-tests/smoke_app_mock.py        Simulated app interaction, no Streamlit needed
+- `FR.INR.LEND` — Lending interest rate (%): https://data.worldbank.org/indicator/FR.INR.LEND
+- `FR.INR.DPST` — Deposit interest rate (%): https://data.worldbank.org/indicator/FR.INR.DPST
+
+The processing script identified identical contents using SHA-256, retained **Mongolia (MNG), United States (USA), and Euro area (EMU)**, converted wide year columns to yearly observations, and kept missing fields empty rather than filling with zero.
+
+Three further files contain policy-rate observations:
+
+- `policy-interest-rate-mongolia.xlsx`: Bank of Mongolia policy-rate announcement/effective dates, converted from Excel serial dates. https://www.mongolbank.mn/
+- `policy-interest-rate-eu.xlsx`: ECB main refinancing operation rate decisions. Grouped years and footnote numbers were cleaned. https://www.ecb.europa.eu/stats/policy_and_exchange_rates/key_ecb_interest_rates/html/index.en.html
+- `policy rate us.csv`: a daily US rate series. **Its precise benchmark definition is not stated in the file**, so it is labeled as an *uploaded daily policy-rate proxy*, not an officially verified policy target.
+
+Annual policy-rate averages are **calendar-day-weighted**: the most recent observation is carried forward through each calendar day until the next dated observation. This creates meaningful annual averages from event-change records and a near-daily series. The separate policy-rate series are **not equivalent to retail lending or bank deposit rates**.
+
+All three regions have annual rows for **2000–2025** (78 rows), with blank cells where the source is missing. Policy events from 2026 are retained in the original dated observation file, but 2026 is deliberately excluded from complete-year averages.
+
+### Data availability in the 2000–2025 window
+
+| Region | Lending rates | Deposit rates | Annual policy rates |
+|---|---|---|---|
+| Mongolia | 2000–2021 (22) | 2000–2021 (22) | 2008–2025 (18) |
+| United States | 2000–2021 (22) | No observations | 2000–2025 (26) |
+| Euro area | No observations | No observations | 2000–2025 (26) |
+
+**There were no historical inflation files in the nine uploads.** The app's existing MNT/USD/EUR inflation defaults remain **editable assumptions**, not historical estimates. Likewise, the current example loan and deposit defaults are preserved rather than replaced with stale 2021 WDI retail observations or different policy benchmarks.
+
+## Files
+
+| File | Contents |
+|---|---|
+| `data/historical_rates_annual.csv` | Master wide-format table, one row per region-year (78 rows) |
+| `data/historical_rates_long.csv` | Observed values only in tidy format (136 rows) |
+| `data/policy_rate_observations.csv` | Dated central-bank and proxy observations (25,593 rows) |
+| `data/data_quality.csv` | Available/missing years and data coverage |
+| `data/sources_and_definitions.csv` | Definitions and source URLs |
+| `data/input_inventory.csv` | Upload inventory, checksums and duplicate handling |
+| `Historical_Interest_Rates_Cleaned.xlsx` | Human-readable cleaned workbook (overview, annual rates, quality, definitions) |
+| `historical_data.py` | Offline data loading and validation for the app |
+| `build_historical_data.py` | Reproducible ETL script (requires supplied `input/` files and `artifact_tool` for XLSX reads) |
+| `app.py` | Original planners plus optional historical-analysis sections |
+| `finance.py` and `report.py` | Unchanged v7.0 finance models and combined PDF report |
+| `tests/test_historical_data.py` | New data-quality and integration regression tests |
+
+## Running and deployment
+
+```bash
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+python -m pytest -q tests
 ```
 
-## Publish updates to GitHub
+For Streamlit Community Cloud, ensure `app.py`, `historical_data.py`, and the `data/` CSV files are committed **together** in the exact directory structure. Set the main file path to `app.py`. The app reads the local CSV files; it does **not** download financial datasets at runtime.
 
-1. Extract the ZIP. Open the resulting project folder.
-2. In your existing GitHub repository, upload the **contents** of the folder, keeping `app.py` and `requirements.txt` at the repository root. Replace existing files when prompted.
-3. Keep the `.streamlit` folder at the root for theme settings. Keep `.github/workflows/tests.yml` for automated tests if your repository accepts workflows. GitHub's web upload may require creating/editing nested files separately; GitHub Desktop or Cursor Git integration is easier for full-folder updates.
-4. Commit your changes to the branch Streamlit deploys (usually `main`).
-5. Open your existing Streamlit site; a successful GitHub commit should trigger a new deployment. If it doesn't, check Streamlit Cloud logs and the selected branch/main file.
+## Limitations and appropriate interpretation
 
-To create a new Streamlit Community Cloud app: go to https://share.streamlit.io, select your GitHub repository, branch, and `app.py` as the main file. Public deployments can be shared with a teacher via URL.
-
-## Local installation with Cursor (Windows)
-
-1. Install Python 3.11 or 3.12 and Cursor.
-2. In Cursor: **File → Open Folder**, select this extracted project folder.
-3. Open **Terminal → New Terminal**, run:
-
-```bat
-py -m pip install -r requirements.txt
-py -m streamlit run app.py
-```
-
-If `py` is unavailable, use `python -m ...`. The browser opens at `http://localhost:8501`.
-
-## Run the tests
-
-```bat
-py -m pip install pytest pypdf
-py -m pytest -q
-```
-
-`tests/smoke_app_mock.py` also exercises both currency choices and confirms the PDF can be generated without a real Streamlit browser session. To run it:
-
-```bat
-py tests/smoke_app_mock.py
-```
-
-## Financial modeling assumptions
-
-- **Mortgage:** fixed nominal annual interest divided by 12, first payment one month after start, immediate principal reduction from extra payments, no bank-specific rounding, escrow adjustments, lender charges, penalties or missed payments. Tax/insurance/PMI add to monthly household outflow only; they don't change principal or interest computations.
-- **Mortgage vs investing:** same nominal monthly cash budget, same mortgage, same end date (original maturity). Market returns are shown as fixed-return what-if cases and exclude investment taxes and fees. Paying down debt reduces interest with much greater certainty than investment returns.
-- **Retirement inputs:** current savings, monthly contributions, and target spending are constant in **today's money**; real return comes from nominal investment return and inflation assumptions. Actual nominal contributions/spending would rise with inflation.
-- **Retirement eligibility:** uses a heuristic withdrawal rate and a constant-return spending present value test, not a guarantee or a simulation outcome.
-- **Retirement Monte Carlo:** independent annual lognormal return factors with a user-specified arithmetic expected return and volatility; inflation is fixed. Each annual return is spread across the year's 12 months. Ignores taxes, fees, correlation, regime changes, and pensions. Seed fixed to make class demos reproducible.
-- **80% savings target:** an illustrative **probability of reaching the initial withdrawal-rule portfolio at retirement**. It is *not* a 80% chance the money lasts through the chosen planning age. Use the separate sustain probability for that question.
-- **Currency:** USD, EUR, MNT selectors change display symbols and example starting amounts; they do **not** perform exchange conversion. PDFs use ISO `MNT` instead of the tugrik symbol for reliable PDF font rendering.
-
-**For education and scenario analysis, not personalized financial advice.**
+Historical country interest rates reflect different definitions across countries and products. An ECB refinancing rate should not be presented as a euro mortgage APR; the US supplied daily rate must not be presented as an official target without verification. Missing annual retail-rate data cannot substantiate a loan offer. A historical annual rate applied to a current loan is a **hypothetical sensitivity scenario**, not a quote or forecast. Nominal savings projections do not include tax, account restrictions, lender fees, or changing interest-rate paths unless the simulation specifically models them.

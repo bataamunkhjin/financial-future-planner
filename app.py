@@ -1,4 +1,4 @@
-"""Financial Future Planner v7.0 — smarter charts, growing savings, clearer reports.
+"""Financial Future Planner v7.1 — smarter charts, growing savings, clearer reports.
 
 Two planners retain their core functionality. Currency labels are not FX conversions.
 All simulations and forecasts are hypothetical educational illustrations.
@@ -27,6 +27,8 @@ from finance import (
     mortgage_investing_return_scenarios,
 )
 from report import generate_pdf_report
+from historical_data import (METRIC_LABELS, annual_rates, region_rows, observed_rates,
+                             rate_summary, quality_report, sources)
 
 st.set_page_config(
     page_title="Financial Future Planner", page_icon="F", layout="wide",
@@ -358,6 +360,60 @@ with loan_tab:
         st.caption(f"Principal is the amount borrowed ({money(loan_amount)}). The remaining "
                    f"{money(chosen_stats['interest'])} is interest paid with the extra-payment strategy.")
 
+    with st.expander("Historical interest rates (uploaded dataset)"):
+        st.caption("Use observed annual rates to examine past borrowing conditions. Uploaded World Bank "
+                   "lending and deposit series end in 2021 for the available countries; newer policy "
+                   "rates are NOT equivalent to consumer loan or savings rates.")
+        historic_region=region_rows(CURRENCY_CODE)
+        history_choices=[name for name in ["lending_rate_pct", "deposit_rate_pct", "policy_rate_annual_avg_pct"]
+                         if historic_region[name].notna().any()]
+        if history_choices:
+            metric=st.selectbox("Which historical rate?", history_choices,
+                                format_func=lambda x: METRIC_LABELS[x], key="loan_history_metric_"+CURRENCY_CODE)
+            series=observed_rates(CURRENCY_CODE,metric)
+            summary=rate_summary(CURRENCY_CODE,metric)
+            if summary is not None:
+                cards([
+                    ("Latest available", f"{summary['latest']:.2f}%", f"Observed in {summary['last_year']}"),
+                    ("Historical average", f"{summary['average']:.2f}%", "2010 onward, observed years only"),
+                    ("Lowest recorded", f"{summary['minimum']:.2f}%", "2010 onward"),
+                    ("Highest recorded", f"{summary['maximum']:.2f}%", "2010 onward"),
+                ])
+                fig_h=go.Figure()
+                fig_h.add_trace(go.Scatter(x=series['year'],y=series[metric],
+                    mode="lines+markers",name=METRIC_LABELS[metric],line=dict(color="#167C75",width=3)))
+                chart(fig_h,x_label="Observation year",y_label="Annual rate (%)",height=315)
+                st.caption(f"{len(series)} observed annual values, {int(series.year.min())}–{int(series.year.max())}. "
+                           "Missing years are not imputed. Historical averages are not forecasts.")
+                if metric == 'lending_rate_pct':
+                    selected_year=st.selectbox("Compare loan repayment with observed year",series['year'].iloc[::-1].astype(int).tolist(),
+                                               key="historic_loan_year_"+CURRENCY_CODE)
+                    observed=float(series.loc[series.year==selected_year,metric].iloc[0])
+                    past_payment=loan_payment(loan_amount,observed,loan_years)
+                    st.metric("Monthly payment at the historical rate",money(past_payment,2),
+                              delta=f"{past_payment-scheduled_payment:+,.2f} {CURRENCY} versus your chosen rate")
+                    st.caption("Hypothetical new loan at the observed annual lending benchmark, "
+                               "with your entered principal and term. This is not a bank quote or historical loan offer.")
+                else:
+                    st.info("This series is shown for historical context, not used as a personal loan APR.")
+        else:
+            st.warning("No annual historical interest-rate observations are available for this region.")
+        cross=st.checkbox("Compare central-bank policy benchmarks across regions",key="cross_country_policy_"+CURRENCY_CODE)
+        if cross:
+            compare=annual_rates().dropna(subset=['policy_rate_annual_avg_pct'])
+            fig=go.Figure()
+            for country,color in [("Mongolia","#167C75"),("United States","#557FA8"),("Euro area","#B77C38")]:
+                d=compare.loc[compare.region==country]
+                fig.add_trace(go.Scatter(x=d.year,y=d.policy_rate_annual_avg_pct,
+                    name=country,mode="lines",line=dict(color=color,width=2.6)))
+            chart(fig,x_label="Year",y_label="Policy rate or rate proxy (%)",height=345)
+            st.caption("Different central-bank series and definitions; useful as context, NOT direct retail-rate comparisons. "
+                       "U.S. supplied CSV does not identify its exact benchmark.")
+        download_csv("Download combined historical rates CSV",annual_rates(),"historical_rates_annual.csv")
+        with st.expander("Data sources and missing-data notes"):
+            st.dataframe(quality_report(),hide_index=True,use_container_width=True)
+            st.dataframe(sources(),hide_index=True,use_container_width=True)
+
     extra_scenarios=annual_loan_scenario(loan_amount,interest_rate,loan_years,extra_monthly,loan_start)
     rate_scenarios=loan_rate_scenarios(loan_amount,interest_rate,loan_years,extra_monthly,loan_start)
     milestones=loan_payoff_milestones(chosen,loan_amount)
@@ -623,6 +679,28 @@ with retirement_tab:
              line=dict(color="#B77C38",width=3)))
         chart(purchasing,x_label="Age",y_label=f"Monthly spending ({CURRENCY})",height=340)
         download_csv("Download inflation projection CSV",inflation_table,"inflation_projection.csv")
+
+    with st.expander("Historical deposit and policy rates"):
+        history_deposit=observed_rates(CURRENCY_CODE,"deposit_rate_pct")
+        history_policy=observed_rates(CURRENCY_CODE,"policy_rate_annual_avg_pct")
+        historical_fig=go.Figure()
+        if not history_deposit.empty:
+            historical_fig.add_trace(go.Scatter(x=history_deposit.year,y=history_deposit.deposit_rate_pct,
+                mode="lines+markers",name="Observed deposit rate",line=dict(color="#167C75",width=3)))
+            deposit_info=rate_summary(CURRENCY_CODE,"deposit_rate_pct")
+            st.caption(f"Latest observed World Bank deposit rate: {deposit_info['latest']:.2f}% "
+                       f"({deposit_info['last_year']}). Your editable bank-rate assumption is {bank_deposit_rate:.2f}%.")
+        else:
+            st.warning("No retail deposit-rate observations for this region were present in your uploaded World Bank files.")
+        if not history_policy.empty:
+            historical_fig.add_trace(go.Scatter(x=history_policy.year,y=history_policy.policy_rate_annual_avg_pct,
+                mode="lines",name="Policy rate / supplied proxy",line=dict(color="#557FA8",width=2,dash="dash")))
+        chart(historical_fig,x_label="Year",y_label="Interest rate (%)",height=320)
+        st.caption("Deposit rates and policy rates refer to different financial products. "
+                   "They are not interchangeable. Your inflation forecast remains an editable assumption: "
+                   "no historical inflation observations were provided with these uploaded files.")
+        download_csv("Download historical interest-rate CSV",region_rows(CURRENCY_CODE),
+                     f"historical_rates_{CURRENCY_CODE}.csv")
 
     # Inflation shock is modeled even if its detail expander is closed so PDF stays accurate.
     with st.expander("Inflation shock simulator"):
