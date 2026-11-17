@@ -1,4 +1,4 @@
-"""Financial Future Planner v5.7 — clean scrolling and compact AUM branding.
+"""Financial Future Planner v5.8 — minimal, emoji-free interface.
 
 Run: python -m streamlit run app.py
 """
@@ -40,7 +40,7 @@ from report import generate_pdf_report
 
 st.set_page_config(
     page_title="Financial Future Planner",
-    page_icon="📈",
+    page_icon="F",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -638,7 +638,7 @@ st.markdown(
 )
 st.sidebar.caption("Scenario planning without accounts or live market data.")
 
-loan_tab, retirement_tab = st.tabs(["🏠 Mortgage / Loan Planner", "🌱 Retirement Planner"])
+loan_tab, retirement_tab = st.tabs(["Mortgage / Loan Planner", "Retirement Planner"])
 
 # ────────────────────────── LOAN TAB ──────────────────────────
 with loan_tab:
@@ -903,7 +903,7 @@ with loan_tab:
                  if col not in ("Month", "Year")},
     )
     st.download_button(
-        "⬇ Download loan amortization CSV",
+        "Download loan amortization CSV",
         data=display_schedule.to_csv(index=False).encode("utf-8-sig"),
         file_name="loan_amortization.csv",
         mime="text/csv",
@@ -1168,13 +1168,13 @@ with retirement_tab:
     d1, d2 = st.columns(2)
     with d1:
         st.download_button(
-            "⬇ Download annual retirement cash flow CSV",
+            "Download annual retirement cash flow CSV",
             data=retirement_yearly.to_csv(index=False).encode("utf-8-sig"),
             file_name="retirement_life_annual.csv", mime="text/csv",
         )
     with d2:
         st.download_button(
-            "⬇ Download monthly retirement cash flow CSV",
+            "Download monthly retirement cash flow CSV",
             data=retirement_monthly.to_csv(index=False).encode("utf-8-sig"),
             file_name="retirement_life_monthly.csv", mime="text/csv",
         )
@@ -1222,7 +1222,7 @@ with retirement_tab:
         fmt["Purchasing Power of One Nominal Unit"] = "{:.3f}"
         st.dataframe(inflation_table.style.format(fmt), use_container_width=True, hide_index=True)
         st.download_button(
-            "⬇ Download inflation and purchasing power CSV",
+            "Download inflation and purchasing power CSV",
             data=inflation_table.to_csv(index=False).encode("utf-8-sig"),
             file_name="inflation_purchasing_power.csv", mime="text/csv",
         )
@@ -1304,14 +1304,14 @@ with retirement_tab:
     z1, z2 = st.columns(2)
     with z1:
         st.download_button(
-            "⬇ Download yearly retirement projection CSV",
+            "Download yearly retirement projection CSV",
             data=projection.to_csv(index=False).encode("utf-8-sig"),
             file_name="retirement_projection.csv",
             mime="text/csv",
         )
     with z2:
         st.download_button(
-            "⬇ Download simulation percentiles CSV",
+            "Download simulation percentiles CSV",
             data=fan.to_csv(index=False).encode("utf-8-sig"),
             file_name="retirement_monte_carlo_percentiles.csv",
             mime="text/csv",
@@ -1415,7 +1415,7 @@ with loan_tab:
                      if col != "Month"},
         )
         st.download_button(
-            "⬇ Download strategy comparison CSV",
+            "Download strategy comparison CSV",
             wealth.to_csv(index=False).encode("utf-8-sig"),
             file_name="mortgage_vs_investing.csv", mime="text/csv",
         )
@@ -1464,7 +1464,7 @@ with st.sidebar:
     st.divider()
     st.subheader("Your report")
     st.download_button(
-        "⬇ Download combined PDF",
+        "Download combined PDF",
         data=report_data,
         file_name="financial_future_planner_report.pdf",
         mime="application/pdf",
@@ -1477,7 +1477,7 @@ with st.sidebar:
 with retirement_tab:
     st.markdown("#### Download your financial report")
     st.download_button(
-        "⬇ Download full loan + retirement PDF report",
+        "Download full loan + retirement PDF report",
         data=report_data,
         file_name="financial_future_planner_report.pdf",
         mime="application/pdf",
