@@ -34,73 +34,79 @@ st.set_page_config(
 )
 
 st.markdown('''<style>
-:root {--bg:#101927; --panel:#192738; --panel2:#202f43; --line:#314257;
---text:#edf3fa; --muted:#a5b7ca; --mint:#5dd4bc; --amber:#f1be79; --blue:#91b2ff;}
-html,body,[data-testid="stAppViewContainer"],.stApp {
- background:#101927 !important; color:#edf3fa !important;
- font-family:Inter,"Segoe UI",Arial,sans-serif;
+/* Calm, readable financial dashboard. Streamlit's native widgets use config.toml. */
+:root {
+  --fp-bg:#F5F7F8; --fp-surface:#FFFFFF; --fp-surface-alt:#EFF5F5;
+  --fp-border:#D9E3E7; --fp-text:#183247; --fp-muted:#586F80;
+  --fp-accent:#167C75; --fp-warning:#B77C38; --fp-blue:#557FA8;
 }
-[data-testid="stHeader"] {background:#101927 !important;}
+html,body,[data-testid="stAppViewContainer"],.stApp {
+  background:var(--fp-bg)!important; color:var(--fp-text)!important;
+  font-family:Inter,"Segoe UI",Arial,sans-serif;
+}
+[data-testid="stHeader"] {background:var(--fp-bg)!important;}
 [data-testid="stDecoration"] {display:none;}
 .block-container {max-width:1240px;padding:1.6rem 2.4rem 4.5rem;}
-section[data-testid="stSidebar"] {background:#172437!important;border-right:1px solid #314257;}
-section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {color:#9eafc1;}
-[data-testid="stVerticalBlockBorderWrapper"] > div {border-color:#304257!important;}
-/* Keep widget text legible; let Streamlit own native input surfaces and focus styles. */
-[data-testid="stWidgetLabel"] p {font-size:.88rem!important;font-weight:600!important;color:#d8e5f3!important;}
-[data-testid="stMetric"] {background:#192738;border:1px solid #304257;border-radius:14px;padding:14px;min-width:0;}
-[data-testid="stMetricLabel"] p {font-size:.80rem!important;color:#b7c8d7!important;}
-[data-testid="stMetricValue"] {font-size:1.33rem!important;letter-spacing:-.035em;overflow-wrap:anywhere;}
+section[data-testid="stSidebar"] {background:#EAF1F3!important;border-right:1px solid var(--fp-border);}
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {color:#5B7182!important;}
+[data-testid="stVerticalBlockBorderWrapper"] > div {border-color:var(--fp-border)!important;}
+/* High-contrast labels and calm input outlines. Do not override native focus handling. */
+[data-testid="stWidgetLabel"] p {font-size:.88rem!important;font-weight:600!important;color:#28445A!important;}
+[data-testid="stMetric"] {background:#FFFFFF;border:1px solid var(--fp-border);border-radius:14px;padding:14px;min-width:0;}
+[data-testid="stMetricLabel"] p {font-size:.80rem!important;color:#596E7E!important;}
+[data-testid="stMetricValue"] {font-size:1.33rem!important;letter-spacing:-.035em;overflow-wrap:anywhere;color:#183247!important;}
 [data-testid="stMetricDelta"] {font-size:.80rem!important;}
-[data-testid="stTabs"] [data-baseweb="tab-list"] {gap:8px;border-bottom:1px solid #314257;}
+[data-testid="stTabs"] [data-baseweb="tab-list"] {gap:8px;border-bottom:1px solid var(--fp-border);}
 [data-testid="stTabs"] [data-baseweb="tab-list"] button {
- color:#aebfd0; padding:10px 18px; border-radius:9px 9px 0 0;font-weight:700;
+  color:#52697C;padding:10px 18px;border-radius:9px 9px 0 0;font-weight:700;
 }
 [data-testid="stTabs"] [data-baseweb="tab-list"] button[aria-selected="true"] {
- color:#5dd4bc;border-bottom:2px solid #5dd4bc;background:#1c2d40;
+  color:#116D65!important;border-bottom:2px solid #167C75;background:#E5F2EF;
 }
-[data-testid="stDownloadButton"] button {border-radius:9px!important;border:1px solid #3b776f!important;}
-[data-testid="stExpander"] {border-color:#314257!important;border-radius:12px!important;}
+[data-testid="stDownloadButton"] button {border-radius:9px!important;border:1px solid #97C6BE!important;}
+[data-testid="stExpander"] {border-color:var(--fp-border)!important;border-radius:12px!important;}
 [data-testid="stExpander"] summary {font-weight:650;}
 [data-testid="stMarkdownContainer"] p {line-height:1.6;}
 .fp-header {display:flex;align-items:center;justify-content:space-between;gap:24px;
- background:#192738;border:1px solid #304257;border-radius:15px;padding:20px 23px;
- margin-bottom:18px;}
-.fp-kicker {font-size:.72rem;text-transform:uppercase;letter-spacing:.11em;color:#5dd4bc;font-weight:800;margin-bottom:5px;}
-.fp-header h1 {font-size:clamp(1.5rem,2.3vw,2rem);line-height:1.18;margin:0 0 7px;letter-spacing:-.035em;color:#edf3fa;}
-.fp-header p {margin:0;color:#aebfd0;font-size:.89rem;}
+ background:#FFFFFF;border:1px solid var(--fp-border);border-radius:15px;padding:20px 23px;
+ margin-bottom:18px;box-shadow:0 4px 18px rgba(30,62,83,.04);}
+.fp-kicker {font-size:.72rem;text-transform:uppercase;letter-spacing:.11em;color:#126D65;font-weight:800;margin-bottom:5px;}
+.fp-header h1 {font-size:clamp(1.5rem,2.3vw,2rem);line-height:1.18;margin:0 0 7px;letter-spacing:-.035em;color:#183247;}
+.fp-header p {margin:0;color:#5A7181;font-size:.89rem;}
 .fp-brand {display:flex;align-items:center;gap:11px;flex-shrink:0;}
 .fp-logo {display:flex;align-items:center;justify-content:center;width:48px;height:55px;
- background:#edf2f8;border-radius:9px;padding:4px;}
+ background:#F4F6FA;border:1px solid #DFE6EC;border-radius:9px;padding:4px;}
 .fp-logo img {width:39px;height:47px;object-fit:contain;}
-.fp-brand-name {font-size:.78rem;font-weight:760;line-height:1.4;color:#e6eef7;}
-.fp-brand-name span {display:block;color:#f1be79;font-size:.71rem;}
+.fp-brand-name {font-size:.78rem;font-weight:760;line-height:1.4;color:#183247;}
+.fp-brand-name span {display:block;color:#98702F;font-size:.71rem;}
 .fp-section {margin:24px 0 10px;}
-.fp-section h2 {font-size:1.25rem;margin:0 0 4px;font-weight:760;letter-spacing:-.02em;color:#edf3fa;}
-.fp-section p {font-size:.87rem;line-height:1.55;color:#a6b7c9;margin:0;}
-.fp-intro {color:#a6b7c9;font-size:.89rem;margin-bottom:16px;}
-.fp-answer {background:#1a2d3a;border:1px solid #3e746b;border-left:4px solid #5dd4bc;
+.fp-section h2 {font-size:1.25rem;margin:0 0 4px;font-weight:760;letter-spacing:-.02em;color:#183247;}
+.fp-section p {font-size:.87rem;line-height:1.55;color:#617586;margin:0;}
+.fp-intro {color:#617586;font-size:.89rem;margin-bottom:16px;}
+.fp-answer {background:#EAF6F2;border:1px solid #BCDAD1;border-left:4px solid #167C75;
  border-radius:12px;padding:17px 20px;margin:14px 0 16px;}
-.fp-answer.caution {background:#302a29;border-color:#8e6954;border-left-color:#f1be79;}
-.fp-answer .fp-answer-label {color:#b3c5d5;text-transform:uppercase;letter-spacing:.07em;font-size:.72rem;font-weight:800;}
-.fp-answer .fp-answer-title {font-size:1.17rem;font-weight:800;color:#f0f6fc;margin:5px 0;}
-.fp-answer .fp-answer-sub {font-size:.83rem;color:#d1deeb;line-height:1.55;}
-.fp-note {background:#1a2839;border:1px solid #304257;color:#c5d3e1;
+.fp-answer.caution {background:#FFF7EA;border-color:#E9D1AD;border-left-color:#B77C38;}
+.fp-answer .fp-answer-label {color:#446D67;text-transform:uppercase;letter-spacing:.07em;font-size:.72rem;font-weight:800;}
+.fp-answer.caution .fp-answer-label {color:#805B30;}
+.fp-answer .fp-answer-title {font-size:1.17rem;font-weight:800;color:#16394A;margin:5px 0;}
+.fp-answer .fp-answer-sub {font-size:.83rem;color:#3D5D67;line-height:1.55;}
+.fp-note {background:#F0F5F7;border:1px solid var(--fp-border);color:#4E6575;
  padding:12px 16px;border-radius:11px;font-size:.83rem;line-height:1.55;margin:10px 0 16px;}
 .fp-metric-row {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:10px 0 18px;}
-.fp-card {background:#192738;border:1px solid #304257;border-radius:13px;padding:15px 15px 13px;min-height:114px;}
-.fp-card .label {font-size:.81rem;line-height:1.4;color:#b0c1d1;}
-.fp-card .value {font-size:clamp(1.03rem,1.6vw,1.44rem);font-weight:800;color:#f0f5fa;
+.fp-card {background:#FFFFFF;border:1px solid var(--fp-border);border-radius:13px;padding:15px 15px 13px;
+ min-height:114px;box-shadow:0 2px 8px rgba(30,62,83,.025);}
+.fp-card .label {font-size:.81rem;line-height:1.4;color:#536C7C;}
+.fp-card .value {font-size:clamp(1.03rem,1.6vw,1.44rem);font-weight:800;color:#16394A;
  margin:10px 0 5px;line-height:1.14;letter-spacing:-.032em;overflow-wrap:anywhere;}
-.fp-card .detail {font-size:.73rem;color:#92a6ba;line-height:1.4;}
-.fp-chart-note {font-size:.77rem;color:#a8b8c8;margin-top:-8px;}
-.fp-divider {height:1px;background:#293b50;margin:28px 0 12px;}
+.fp-card .detail {font-size:.73rem;color:#627989;line-height:1.4;}
+.fp-chart-note {font-size:.77rem;color:#5B7182;margin-top:-8px;}
+.fp-divider {height:1px;background:var(--fp-border);margin:28px 0 12px;}
 @media(max-width:960px){.block-container {padding:1.3rem 1.2rem 3.6rem;}
-.fp-metric-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
+ .fp-metric-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:600px){.fp-header{padding:16px;gap:9px}.fp-brand-name{display:none;}
-.fp-logo{width:40px;height:47px}.fp-logo img{width:32px;height:40px;}
-.fp-metric-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
-.fp-card{min-height:110px;padding:11px;}}
+ .fp-logo{width:40px;height:47px}.fp-logo img{width:32px;height:40px;}
+ .fp-metric-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+ .fp-card{min-height:110px;padding:11px;}}
 </style>''', unsafe_allow_html=True)
 
 # Currency controls are labels and regional planning assumptions, NOT FX conversions.
@@ -202,19 +208,19 @@ def answer(label: str, title: str, explanation: str, caution: bool = False) -> N
 
 def chart(fig: go.Figure, *, x_label: str = "", y_label: str = "", height: int = 350) -> None:
     fig.update_layout(
-        template="plotly_dark", height=height,
+        template="plotly_white", height=height,
         margin=dict(l=42, r=17, t=66, b=58),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#d1deeb"),
-        colorway=["#5dd4bc", "#91b2ff", "#f1be79", "#b5a0fa"],
+        font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#28475B"),
+        colorway=["#167C75", "#557FA8", "#B77C38", "#8B74B1"],
         legend=dict(orientation="h", y=1.13, x=0, bgcolor="rgba(0,0,0,0)", font=dict(size=11)),
-        hovermode="x unified", hoverlabel=dict(bgcolor="#23354c",font_size=12),
+        hovermode="x unified", hoverlabel=dict(bgcolor="#FFFFFF",font_size=12,font_color="#183247",bordercolor="#D9E3E7"),
     )
     fig.update_xaxes(title=x_label, showgrid=False, zeroline=False,
-                     title_font=dict(size=11,color="#afc1d1"), linecolor="#395068")
-    fig.update_yaxes(title=y_label, gridcolor="rgba(142,165,190,.12)",
+                     title_font=dict(size=11,color="#567184"), linecolor="#CAD7DE")
+    fig.update_yaxes(title=y_label, gridcolor="rgba(58,93,110,.12)",
                      zeroline=False, separatethousands=True,
-                     title_font=dict(size=11,color="#afc1d1"))
+                     title_font=dict(size=11,color="#567184"))
     st.plotly_chart(fig, use_container_width=True, theme=None,
                     config={"displayModeBar":False,"scrollZoom":False,"responsive":True})
 
@@ -293,7 +299,7 @@ with loan_tab:
     ])
     section("See the difference extra payments make","The lower line means less outstanding debt.")
     loan_bal=go.Figure()
-    for df,name,col in [(standard,"Standard repayment","#91b2ff"),(chosen,"With extra payments","#5dd4bc")]:
+    for df,name,col in [(standard,"Standard repayment","#557FA8"),(chosen,"With extra payments","#167C75")]:
         loan_bal.add_trace(go.Scatter(x=[0]+df["Month"].tolist(),
               y=[loan_amount]+df["Ending Balance"].tolist(),name=name,
               line=dict(color=col,width=3),mode="lines"))
@@ -304,13 +310,13 @@ with loan_tab:
         st.caption("Principal is the borrowed amount. Interest is the price paid to borrow it.")
         allocation=go.Figure()
         allocation.add_trace(go.Bar(y=["Loan cost"],x=[loan_amount],name="Principal",
-                                    orientation="h",marker_color="#5dd4bc"))
+                                    orientation="h",marker_color="#167C75"))
         allocation.add_trace(go.Bar(y=["Loan cost"],x=[chosen_stats["interest"]],name="Interest",
-                                    orientation="h",marker_color="#f1be79"))
+                                    orientation="h",marker_color="#B77C38"))
         allocation.update_layout(barmode="stack")
         chart(allocation,x_label=f"Total repayment ({CURRENCY})",height=240)
         interest_chart=go.Figure()
-        for df,name,col in [(standard,"Standard","#91b2ff"),(chosen,"With extras","#5dd4bc")]:
+        for df,name,col in [(standard,"Standard","#557FA8"),(chosen,"With extras","#167C75")]:
             interest_chart.add_trace(go.Scatter(x=df["Month"],y=df["Interest"].cumsum(),
                                       name=name,line=dict(color=col,width=3)))
         chart(interest_chart,x_label="Month",y_label=f"Cumulative interest ({CURRENCY})",height=340)
@@ -331,20 +337,20 @@ with loan_tab:
         if scenario_view=="Interest saved with extra payments":
             scenario_fig=go.Figure(go.Bar(
                 x=extra_scenarios["Scenario"],y=extra_scenarios["Interest Saved"],
-                marker_color="#5dd4bc"))
+                marker_color="#167C75"))
             chart(scenario_fig,y_label=f"Interest avoided ({CURRENCY})",height=300)
         elif scenario_view=="Monthly payment at different rates":
             scenario_fig=go.Figure(go.Scatter(
                 x=rate_scenarios["Rate (%)"],y=rate_scenarios["Monthly P&I"],
-                mode="lines+markers",name="Monthly payment",line=dict(color="#91b2ff",width=3)))
+                mode="lines+markers",name="Monthly payment",line=dict(color="#557FA8",width=3)))
             chart(scenario_fig,x_label="Annual interest (%)",y_label=f"Payment ({CURRENCY})",height=300)
         else:
             yearly_paid=standard.groupby("Year",as_index=False)[["Principal","Interest"]].sum()
             scenario_fig=go.Figure()
             scenario_fig.add_trace(go.Bar(x=yearly_paid["Year"],y=yearly_paid["Principal"],
-                                          name="Principal",marker_color="#5dd4bc"))
+                                          name="Principal",marker_color="#167C75"))
             scenario_fig.add_trace(go.Bar(x=yearly_paid["Year"],y=yearly_paid["Interest"],
-                                          name="Interest",marker_color="#f1be79"))
+                                          name="Interest",marker_color="#B77C38"))
             scenario_fig.update_layout(barmode="stack")
             chart(scenario_fig,x_label="Year",y_label=f"Annual repayment ({CURRENCY})",height=320)
         st.caption("Higher rates increase borrowing costs, but all results are illustrative.")
@@ -462,9 +468,9 @@ with retirement_tab:
     section("Your savings over time","Savings grow before retirement, then support monthly withdrawals. Returns continue after retirement.")
     balance_fig=go.Figure()
     balance_fig.add_trace(go.Scatter(x=projection["Age"],y=projection["Balance (today's money)"],
-         name="Expected balance (steady returns)",line=dict(color="#5dd4bc",width=3),
-         fill="tozeroy",fillcolor="rgba(93,212,188,.09)"))
-    balance_fig.add_vline(x=int(retirement_age),line_color="#f1be79",line_dash="dot",line_width=2)
+         name="Expected balance (steady returns)",line=dict(color="#167C75",width=3),
+         fill="tozeroy",fillcolor="rgba(22,124,117,.09)"))
+    balance_fig.add_vline(x=int(retirement_age),line_color="#B77C38",line_dash="dot",line_width=2)
     chart(balance_fig,x_label="Your age",y_label=f"Balance ({CURRENCY}, today's money)",height=365)
     st.caption(f"The dotted line marks retirement at age {retirement_age}. Savings and spending are assumed to rise with inflation in nominal terms.")
 
@@ -477,17 +483,17 @@ with retirement_tab:
     mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P10"],line=dict(width=0),
                     name="Lower 10% boundary",showlegend=False,hoverinfo="skip"))
     mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P90"],line=dict(width=0),
-                    fill="tonexty",fillcolor="rgba(145,178,255,.17)",name="10th–90th percentile range"))
+                    fill="tonexty",fillcolor="rgba(85,127,168,.16)",name="10th–90th percentile range"))
     if show_middle:
         mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P25"],line=dict(width=0),
                     showlegend=False,hoverinfo="skip"))
         mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["P75"],line=dict(width=0),
-                    fill="tonexty",fillcolor="rgba(93,212,188,.19)",name="Middle 50% range"))
-    mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["Median"],line=dict(color="#5dd4bc",width=3),
+                    fill="tonexty",fillcolor="rgba(22,124,117,.17)",name="Middle 50% range"))
+    mc_fig.add_trace(go.Scatter(x=fan["Age"],y=fan["Median"],line=dict(color="#167C75",width=3),
                     name="Typical simulated outcome"))
     mc_fig.add_trace(go.Scatter(x=projection["Age"],y=projection["Balance (today's money)"],
-                    line=dict(color="#f1be79",dash="dash",width=2),name="Steady-return estimate"))
-    mc_fig.add_vline(x=int(retirement_age),line_dash="dot",line_color="#afc0d1")
+                    line=dict(color="#B77C38",dash="dash",width=2),name="Steady-return estimate"))
+    mc_fig.add_vline(x=int(retirement_age),line_dash="dot",line_color="#8A9EA9")
     chart(mc_fig,x_label="Your age",y_label=f"Portfolio ({CURRENCY}, today's money)",height=400)
     st.caption("The shaded area covers the 10th to 90th percentile at each age. The green line is the median. "
                "The dashed gold line assumes a fixed return every year. Simulations assume fixed inflation and independent annual returns.")
@@ -508,10 +514,10 @@ with retirement_tab:
         contribution_fig=go.Figure()
         contribution_fig.add_trace(go.Scatter(x=savings_build["Age"],
             y=savings_build["Starting savings + deposits"],name="Your deposits",
-            line=dict(color="#91b2ff",width=3)))
+            line=dict(color="#557FA8",width=3)))
         contribution_fig.add_trace(go.Scatter(x=savings_build["Age"],
             y=savings_build["Balance (today's money)"],name="Portfolio incl. growth",
-            line=dict(color="#5dd4bc",width=3)))
+            line=dict(color="#167C75",width=3)))
         chart(contribution_fig,x_label="Age",y_label=f"Savings ({CURRENCY})",height=320)
 
     with st.expander("Retirement life simulator and annual cash flow"):
@@ -519,7 +525,7 @@ with retirement_tab:
         life=go.Figure()
         life.add_trace(go.Scatter(x=[int(retirement_age)]+retirement_yearly["Age"].tolist(),
              y=[planned_balance]+retirement_yearly["Ending Balance"].tolist(),
-             line=dict(color="#5dd4bc",width=3),name="Portfolio remaining"))
+             line=dict(color="#167C75",width=3),name="Portfolio remaining"))
         life_view=st.selectbox("Retirement chart",["Remaining portfolio","Annual growth and withdrawals"],
                                key="retirement_cashflow_chart")
         if life_view=="Remaining portfolio":
@@ -527,9 +533,9 @@ with retirement_tab:
         else:
             cf_fig=go.Figure()
             cf_fig.add_trace(go.Bar(x=retirement_yearly["Age"],
-                y=retirement_yearly["Investment Growth"],name="Investment growth",marker_color="#5dd4bc"))
+                y=retirement_yearly["Investment Growth"],name="Investment growth",marker_color="#167C75"))
             cf_fig.add_trace(go.Bar(x=retirement_yearly["Age"],
-                y=-retirement_yearly["Actual Withdrawals"],name="Spending funded",marker_color="#f1be79"))
+                y=-retirement_yearly["Actual Withdrawals"],name="Spending funded",marker_color="#B77C38"))
             cf_fig.update_layout(barmode="relative")
             chart(cf_fig,x_label="Age",y_label=f"Annual cash flow ({CURRENCY})",height=320)
         paged_table(retirement_yearly,key="retirement_yearly")
@@ -548,10 +554,10 @@ with retirement_tab:
         purchasing=go.Figure()
         purchasing.add_trace(go.Scatter(x=inflation_table["Age"],
              y=inflation_table["Monthly Spending - Today's Money"],name="Today's purchasing power",
-             line=dict(color="#5dd4bc",width=3)))
+             line=dict(color="#167C75",width=3)))
         purchasing.add_trace(go.Scatter(x=inflation_table["Age"],
              y=inflation_table["Monthly Spending - Future Money"],name="Future nominal cost",
-             line=dict(color="#f1be79",width=3)))
+             line=dict(color="#B77C38",width=3)))
         chart(purchasing,x_label="Age",y_label=f"Monthly spending ({CURRENCY})",height=340)
         download_csv("Download inflation projection CSV",inflation_table,"inflation_projection.csv")
 
@@ -581,9 +587,9 @@ with retirement_tab:
         shock_yearly=shock_result["yearly"]
         shock_fig=go.Figure()
         shock_fig.add_trace(go.Scatter(x=shock_yearly["Age"],y=shock_yearly["Base balance (today's money)"],
-                  name="Normal",line=dict(color="#5dd4bc",width=3)))
+                  name="Normal",line=dict(color="#167C75",width=3)))
         shock_fig.add_trace(go.Scatter(x=shock_yearly["Age"],y=shock_yearly["Shock balance (today's money)"],
-                  name="Inflation shock",line=dict(color="#f1be79",width=3,dash="dash")))
+                  name="Inflation shock",line=dict(color="#B77C38",width=3,dash="dash")))
         chart(shock_fig,x_label="Age",y_label=f"Portfolio ({CURRENCY}, today's money)",height=340)
         st.caption("Investment returns remain unchanged during the shock. The higher price level persists after inflation normalizes. "
                    "This deterministic scenario does not recalculate Monte Carlo probabilities.")
@@ -625,9 +631,9 @@ with loan_tab:
         wealth=invest_comparison["table"]
         fig=go.Figure()
         fig.add_trace(go.Scatter(x=wealth["Month"],y=wealth["Invest Strategy Net Wealth"],
-                         name="Invest spare cash",line=dict(color="#91b2ff",width=3)))
+                         name="Invest spare cash",line=dict(color="#557FA8",width=3)))
         fig.add_trace(go.Scatter(x=wealth["Month"],y=wealth["Prepay Strategy Net Wealth"],
-                         name="Prepay then invest",line=dict(color="#5dd4bc",width=3)))
+                         name="Prepay then invest",line=dict(color="#167C75",width=3)))
         chart(fig,x_label="Loan month",y_label=f"Net financial wealth ({CURRENCY})",height=350)
         st.caption("This comparison excludes the value of items bought with the loan and assumes steady returns, no fees, and no taxes. "
                    "It is not an investment recommendation.")
