@@ -170,7 +170,7 @@ def generate_pdf_report(
     story.append(_p("Your financial planning report", styles["ReportTitle"]))
     story.append(_p(f"Munkhjin Bataa  |  {date.today():%d %B %Y}  |  {code}", styles["ReportSub"]))
     para("This report summarizes the assumptions and automatic what-if analysis currently entered in the app. Figures are estimates, not offers or guarantees.")
-    heading("01  |  Mortgage and loan analysis")
+    heading("01  |  Loan analysis")
     table(["Loan input", "Value", "Loan output", "Value"], [
         ["Starting principal", _currency(loan["amount"], code), "Scheduled monthly P&I", _currency(loan["payment"], code)],
         ["Loan interest rate", f'{loan["rate"]:.2f}%', "Standard lifetime interest", _currency(loan["standard_interest"], code)],
@@ -188,8 +188,8 @@ def generate_pdf_report(
         [r["Scenario"], _currency(r["Extra / Month"], code), _currency(r["Interest Saved"], code),
          f'{int(r["Payoff Months"])}'] for _, r in loan_extra_sensitivity.iterrows()
     ], [157, 133, 130, width-420])
-    small("An existing fixed-rate loan will not change when market rates move. Extra payments are assumed to reduce principal immediately with no prepayment penalty. Property tax, insurance and PMI are not modeled in interest or investment comparisons.")
-    heading("Remaining mortgage principal")
+    small("An existing fixed-rate loan will not change when market rates move. Extra payments are assumed to reduce principal immediately with no prepayment penalty. Monthly payments reflect principal and interest only; any lender charges or prepayment fees are excluded.")
+    heading("Remaining loan principal")
     story.append(_line_chart([
         ("Standard", np.concatenate([[0], base_loan_schedule["Month"].to_numpy()]),
          np.concatenate([[loan["amount"]], base_loan_schedule["Ending Balance"].to_numpy()]), BLUE),
@@ -198,15 +198,15 @@ def generate_pdf_report(
     ], width=width, height=145))
 
     story.append(PageBreak())
-    heading("02  |  Mortgage prepayment versus investing")
-    para("Both strategies have the same fixed monthly cash budget. Investing uses the leftover cash while making standard loan payments. Prepaying puts the extra toward the mortgage and invests the freed payment after payoff.")
+    heading("02  |  Loan prepayment versus investing")
+    para("Both strategies have the same fixed monthly cash budget. Investing uses the leftover cash while making standard loan payments. Prepaying puts the extra toward the loan and invests the freed payment after payoff.")
     table(["Assumption / result", "Value", "Assumption / result", "Value"], [
         ["Extra budget / month", _currency(investing["comparison_extra"], code), "Investment annual return", f'{retirement["return"]:.2f}%'],
         ["Fixed monthly budget", _currency(investing["monthly_budget"], code), "Comparison horizon", f'{investing["horizon_months"] // 12} years'],
         ["Invest extra - end value", _currency(investing["invest_portfolio"], code), "Prepay first - end value", _currency(investing["prepay_portfolio"], code)],
         ["Modeled winner", investing["winner"], "End value difference", _currency(abs(investing["difference"]), code)],
     ], [127, 122, 141, width-390])
-    small("Both strategies are debt-free by the scheduled loan maturity. Results are future nominal portfolio balances, not inflation-adjusted figures. Fixed investment return, no investing taxes/fees, no property value, liquidity or prepayment fees. This is a sensitivity model, not a recommendation.")
+    small("Both strategies are debt-free by the scheduled loan maturity. Results are future nominal portfolio balances, not inflation-adjusted figures. Fixed investment return, no investing taxes/fees, no purchased-asset valuation, liquidity constraints or prepayment fees. This is a sensitivity model, not a recommendation.")
     plot = investing["table"]
     heading("Net financial wealth (investment balance minus outstanding debt)")
     story.append(_line_chart([
@@ -270,12 +270,12 @@ def generate_pdf_report(
     for line in retirement_insights[:4]:
         para("- " + line)
     small(f"Monte Carlo: {retirement['simulations']:,} illustrative independent-annual-return paths. Fully funding every withdrawal through age {retirement['planning_age']}: {retirement['sustain_probability']:.1%}.")
-    small("Not modeled: local tax rules, employer/pension income, fees, changes in contribution or spending, variable mortgage rates, or correlations. Temporary inflation shocks are analyzed separately with fixed nominal investment returns. Retirement assumptions use constant real purchasing power; mortgage investing comparison uses constant nominal cash flows.")
+    small("Not modeled: local tax rules, employer/pension income, fees, changes in contribution or spending, variable loan rates, or correlations. Temporary inflation shocks are analyzed separately with fixed nominal investment returns. Retirement assumptions use constant real purchasing power; loan prepayment comparison uses constant nominal cash flows.")
     heading("What these results mean")
     table(["Measure", "Interpretation"], [
         ["Total loan interest", "Cumulative interest charged under the assumed fixed-rate amortization schedule."],
         ["Principal milestones", "The first loan payment date when the stated share of ORIGINAL principal is repaid."],
-        ["Mortgage vs investing", "Two strategies with equal monthly cash spending, compared at original loan maturity."],
+        ["Loan payoff vs investing", "Two strategies with equal monthly cash spending, compared at original loan maturity."],
         ["Retirement capital needed", "Present value of planned real monthly spending through the chosen age, using a constant real return."],
         ["80% simulated savings goal", "Monthly saving for at least ~80% of simulated paths to fund every modeled withdrawal."],
         ["Monte Carlo spending success", "Share of simulated paths able to fund all modeled monthly withdrawals until planning age."],

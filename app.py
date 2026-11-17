@@ -268,6 +268,7 @@ with st.sidebar.expander("Default rate sources (2026)"):
                "USD uses US September 2026 CPI; EUR uses euro-area October 2026 flash CPI.")
     st.caption("Investment return and volatility are illustrative risk assumptions, NOT published currency statistics. "
                "All defaults are editable. Currency selection does not convert money.")
+    st.caption("Loan rates are examples, not quotes for every loan type. The USD and EUR defaults come from housing-loan benchmarks; enter your lender's rate for car, personal, or other loans.")
 
 
 def money(value: float, decimals: int = 0) -> str:
@@ -648,12 +649,12 @@ hero_html = """<section class="planner-hero">
 st.markdown(hero_html.replace("__SCHOOL_LOGO__", logo_markup), unsafe_allow_html=True)
 st.markdown(
     '<div class="masthead-note"><span>PERSONAL FINANCE WORKSPACE</span>'
-    '<span>Mortgage planning &nbsp; · &nbsp; Retirement forecasting</span></div>',
+    '<span>Loan planning &nbsp; · &nbsp; Retirement forecasting</span></div>',
     unsafe_allow_html=True,
 )
 st.sidebar.caption("Scenario planning without accounts or live market data.")
 
-loan_tab, retirement_tab = st.tabs(["Mortgage / Loan Planner", "Retirement Planner"])
+loan_tab, retirement_tab = st.tabs(["Loan Planner", "Retirement Planner"])
 
 # ────────────────────────── LOAN TAB ──────────────────────────
 with loan_tab:
@@ -687,21 +688,12 @@ with loan_tab:
                 help_text="Extra amount paid every month on top of your regular loan payment; applied to principal.",
             )
 
-        with st.expander("Advanced mortgage costs and loan start date (optional)"):
-            st.caption(
-                "Taxes, insurance, and PMI affect monthly housing cash flow, not the "
-                "principal-and-interest amortization calculation."
+        with st.expander("Loan start date (optional)"):
+            loan_start = st.date_input(
+                "Loan starts", value=date.today(),
+                min_value=date(2000, 1, 1), max_value=date(2100, 12, 31),
             )
-            x, y, z, w = st.columns(4, vertical_alignment="bottom")
-            with x:
-                loan_start = st.date_input("Loan starts", value=date.today(), min_value=date(2000, 1, 1), max_value=date(2100, 12, 31))
-            with y:
-                monthly_tax = money_input(f"Property tax / month ({CURRENCY})", name="monthly_tax", default=0.0)
-            with z:
-                monthly_insurance = money_input(f"Insurance / month ({CURRENCY})", name="monthly_insurance", default=0.0)
-            with w:
-                monthly_pmi = money_input(f"PMI / month ({CURRENCY})", name="monthly_pmi", default=0.0)
-            st.caption("PMI is held constant until payoff in this simplified model; actual cancellation rules differ.")
+            st.caption("Used to estimate your final loan payment date. The first payment is modeled one month after the start date.")
 
     scheduled_payment = loan_payment(loan_amount, interest_rate, loan_years)
     standard = loan_schedule(loan_amount, interest_rate, loan_years, 0, loan_start)
@@ -713,26 +705,26 @@ with loan_tab:
 
     st.markdown("#### Your loan at a glance")
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Scheduled monthly P&I", money(scheduled_payment, 2))
+    m1.metric("Scheduled monthly payment", money(scheduled_payment, 2))
     m2.metric("Total interest · standard", money(standard_stats["interest"]))
     m3.metric("Interest saved with extra", money(saved_interest))
     m4.metric("Payoff time saved", months_as_text(months_saved))
 
     with st.container(border=True):
         q1, q2, q3, q4 = st.columns(4)
-        q1.metric("Monthly outflow incl. extra", money(scheduled_payment + extra_monthly + monthly_tax + monthly_insurance + monthly_pmi, 2))
+        q1.metric("Monthly payment + extra", money(scheduled_payment + extra_monthly, 2))
         q2.metric("Payoff date · with extra", chosen_stats["payoff_date"].strftime("%b %Y"))
         q3.metric("Total loan payments · with extra", money(chosen_stats["paid"]))
         q4.metric("Principal vs. interest · standard", f"{100 * standard_stats['interest_to_principal']:.1f}%")
         st.caption(
-            "P&I means principal and interest. Monthly outflow includes any optional taxes/insurance/PMI. "
+            "Monthly payment + extra includes only loan principal and interest. "
             "Principal-vs-interest percentage is total standard interest divided by original loan principal. "
             "Payoff assumes the first scheduled payment occurs one month after the loan start date."
         )
 
     # Keep charts separated vertically so nothing is squeezed into narrow columns.
     # Cost allocation is a horizontal stacked bar: easier to read than a small donut.
-    st.markdown('<p class="section-kicker">Your mortgage, visualized</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-kicker">Your loan, visualized</p>', unsafe_allow_html=True)
     st.markdown("#### Loan cost at a glance")
     st.caption("Your original principal and the interest you will pay with the selected extra payment.")
     loan_total = loan_amount + chosen_stats["interest"]
@@ -762,7 +754,7 @@ with loan_tab:
         f"Total repaid with extra payments: **{money(chosen_stats['paid'])}** · "
         f"Original principal: **{money(loan_amount)}** · "
         f"Interest: **{money(chosen_stats['interest'])}**. "
-        "The bar represents principal and interest only (not taxes, insurance or PMI)."
+        "The bar shows how your total repayments are divided between original principal and interest."
     )
 
     st.markdown("#### Interest accumulated over the loan")
@@ -862,7 +854,7 @@ with loan_tab:
     render_chart(plot_layout(fig_rates, height=275, y_label=f"Monthly principal & interest ({CURRENCY})"),use_container_width=True)
     st.caption(
         "Rate scenarios are hypothetical quotes for a *new* fixed-rate loan. "
-        "Existing fixed-rate mortgages do not automatically reprice when interest rates change. "
+        "Existing fixed-rate loans do not automatically reprice when interest rates change. "
         "The entered extra payment stays unchanged in each scenario."
     )
 
@@ -1492,7 +1484,7 @@ with retirement_tab:
         "arithmetic mean and volatility. Historical returns and future results may differ substantially."
     )
 
-# ───────────────── LINKED MORTGAGE VS INVESTING ─────────────────
+# ───────────────── LOAN PREPAYMENT VS INVESTING ─────────────────
 # Running both tab calculations before this section allows us to reuse the
 # Retirement tab's *existing* expected-return assumption: no fifth loan input.
 comparison_extra = extra_monthly if extra_monthly > 0 else scheduled_payment * 0.05
@@ -1507,16 +1499,16 @@ investment_insights = [
     f"the modeled {invest_comparison['winner'].lower()} strategy finishes "
     f"{loan_years} years later with an advantage of {money(abs(invest_comparison['difference']))} "
     "in nominal financial assets.",
-    f"The mortgage's effective annual borrowing rate is about "
+    f"The loan's effective annual borrowing rate is about "
     f"{invest_comparison['breakeven_effective_annual_pct']:.2f}% versus the assumed "
     f"{expected_return:.2f}% annual investment return. Both are model assumptions, "
     "and investment results are uncertain.",
 ]
 
 with loan_tab:
-    st.markdown("#### Mortgage prepayment versus investing")
+    st.markdown("#### Loan prepayment versus investing")
     st.markdown(
-        "**Should you put spare monthly cash toward your mortgage or invest it instead?** "
+        "**Should you use spare monthly cash to repay your loan early or invest it instead?** "
         "This comparison holds your total monthly cash budget constant under both strategies."
     )
     if extra_monthly == 0:
@@ -1548,11 +1540,11 @@ with loan_tab:
     )
     st.caption(
         "Net financial wealth = investment assets minus unpaid loan principal; "
-        "home value is excluded because both strategies own the same property. "
+        "the calculation excludes any assets purchased with the borrowed money. "
         f"Investment return: {expected_return:.2f}% nominal/year, taken from the "
         "Retirement tab's Advanced assumptions. The same monthly loan-plus-spare-cash "
         "budget is allocated under both strategies, and any unused final payment is invested. "
-        f"The comparison ends after {loan_years} years, when both mortgages are paid off. "
+        f"The comparison ends after {loan_years} years, when both loans are paid off. "
         "Fixed return, no fees or taxes, no loan prepayment fee or investment risk modeling. "
         "Investing has market risk and is not guaranteed to outperform paying down debt."
     )
@@ -1572,12 +1564,12 @@ with loan_tab:
     render_chart(plot_layout(difference_plot,height=280,y_label=f"Invest − prepay ({CURRENCY})"),use_container_width=True)
     st.caption(
         "Each row assumes a DIFFERENT constant investment return, not a predicted probability. "
-        "The 'Loan return break-even' row uses the fixed mortgage's effective annual borrowing rate. "
+        "The 'Loan return break-even' row uses the fixed loan's effective annual borrowing rate. "
         "Results exclude market volatility, taxes and fees."
     )
     for insight in investment_insights:
         st.info(insight)
-    with st.expander("See month-by-month mortgage vs. investing results"):
+    with st.expander("See month-by-month loan repayment vs. investing results"):
         paged_table(
             wealth, key="wealth_strategy_table",
             formats={col: "{:,.2f}" for col in wealth.select_dtypes(include="number").columns
@@ -1586,7 +1578,7 @@ with loan_tab:
         st.download_button(
             "Download strategy comparison CSV",
             wealth.to_csv(index=False).encode("utf-8-sig"),
-            file_name="mortgage_vs_investing.csv", mime="text/csv",
+            file_name="loan_vs_investing.csv", mime="text/csv",
         )
 
 # ─────────────────── DOWNLOADABLE TWO-PLANNER PDF ───────────────────
