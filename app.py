@@ -1,4 +1,4 @@
-"""Financial Future Planner v7.2 — historical rate decision simulators.
+"""Financial Future Planner v7.3 — clear loan-rate scenarios.
 
 Two planners retain their core functionality. Currency labels are not FX conversions.
 All simulations and forecasts are hypothetical educational illustrations.
@@ -360,65 +360,167 @@ with loan_tab:
         st.caption(f"Principal is the amount borrowed ({money(loan_amount)}). The remaining "
                    f"{money(chosen_stats['interest'])} is interest paid with the extra-payment strategy.")
 
-    with st.expander("Loan rate stress test — replay past rate changes", expanded=False):
-        st.caption("What if a hypothetical VARIABLE-rate loan repriced each year as rates moved in a "
-                   "past period? Your fixed-rate loan comparison always uses the interest rate above.")
+    # A user-facing decision scenario; the historical data drives the math, not
+    # a standalone historical chart. Fixed-rate repayments remain unchanged.
+    with st.expander("What if your loan interest rate changes?", expanded=False):
+        st.markdown("**See how changing interest rates could affect your loan payments.**")
+        st.write(
+            "This example is for a **variable-rate loan** (a loan where the bank can "
+            "change your interest rate). If you have a **fixed-rate loan**, your "
+            "contracted rate normally stays the same."
+        )
+        st.caption(
+            "We start with the loan amount, interest rate, and repayment term you entered "
+            "above. Then we apply the rate increases or decreases from a real past period "
+            "to a hypothetical loan starting now. This is not a prediction."
+        )
         rate_history,loan_basis=scenario_source(CURRENCY_CODE,"loan")
         lp1,lp2=st.columns(2,gap="large")
         with lp1:
-            loan_window_years=st.selectbox("Historical period length (years)",[3,5,10],
-                                            index=1,key=f"loan_stress_length_{CURRENCY_CODE}")
+            loan_window_years=st.selectbox(
+                "1. How many years do you want to test?",[3,5,10],index=1,
+                key=f"loan_stress_length_{CURRENCY_CODE}",
+                help="We compare your loan over this many years, or until it is paid off."
+            )
         loan_periods=consecutive_windows(rate_history,loan_window_years)
+        period_labels=[f"{a}–{b}" for a,b in loan_periods]
         with lp2:
-            loan_period_label=st.selectbox("Replay which historical period?",
-                [f"{a}–{b}" for a,b in loan_periods],key=f"loan_stress_period_{CURRENCY_CODE}")
-        loan_period_start,loan_period_end=loan_periods[[f"{a}–{b}" for a,b in loan_periods].index(loan_period_label)]
+            loan_period_label=st.selectbox(
+                "2. Which past rate pattern should we try?",period_labels,
+                key=f"loan_stress_period_{CURRENCY_CODE}",
+                help="A past example supplies the sequence of yearly rate changes; "
+                     "it does not change your loan start date."
+            )
+        loan_period_start,loan_period_end=loan_periods[period_labels.index(loan_period_label)]
         if loan_basis=="retail":
-            st.caption("Uses recorded World Bank lending-rate CHANGES (percentage-point movements), "
-                       "applied to your entered loan APR. Historical rate levels are not substituted for a bank quote.")
+            st.caption(
+                "We use how the country's recorded average lending rate went up or down "
+                f"from {loan_period_start} to {loan_period_end}. Your starting rate stays "
+                "the one you entered above; we do not replace it with old bank rates."
+            )
             loan_pass_through=100
         else:
-            st.info("No historical consumer lending-rate observations were supplied for this region. "
-                    "This is an assumed stress scenario based on policy-rate CHANGES, "
-                    "not actual loan APR changes. " +
-                    ("The exact definition of your uploaded U.S. daily rate series is unverified."
-                     if CURRENCY_CODE=="USD" else ""))
-            loan_pass_through=st.slider("Assumed loan response to policy-rate changes (%)",
-                                       min_value=0,max_value=100,value=50,step=10,
-                                       key=f"loan_policy_response_{CURRENCY_CODE}")
-        loan_path=scenario_rate_path(rate_history,loan_period_start,loan_period_end,
-                                    interest_rate,observed_levels=False,
-                                    pass_through_pct=loan_pass_through)
-        loan_stress=simulate_loan_rate_replay(loan_amount,interest_rate,int(loan_years),extra_monthly,loan_path)
-        first_max=max(loan_stress['fixed_payment'],loan_stress['peak_required_payment'])
-        answer("HISTORICAL LOAN STRESS RESULT",f"Peak required payment: {money(loan_stress['peak_required_payment'],2)} / month",
-               f"Compared with {money(loan_stress['fixed_payment'],2)} at your fixed interest rate. "
-               f"Comparison covers the first {loan_stress['months_compared']} months; "
-               "monthly extra payments are modeled in both scenarios.",
-               caution=loan_stress['peak_required_payment']>loan_stress['fixed_payment']*1.05)
-        cards([
-            ("Peak payment change",money(loan_stress['peak_required_payment']-loan_stress['fixed_payment'],2),
-             "Versus fixed required payment"),
-            ("Interest difference",money(loan_stress['interest_difference']),
-             "Changing-rate minus fixed-rate interest"),
-            ("Stress-test balance",money(loan_stress['scenario_balance']),"Debt remaining at period end"),
-            ("Fixed-rate balance",money(loan_stress['fixed_balance']),"Same period, with same extra payments"),
-        ])
-        loan_interest_move=loan_stress['interest_difference']
-        if loan_interest_move>1:
-            st.info(f"In this replay, repricing increases interest paid by approximately "
-                    f"{money(abs(loan_interest_move))} over the comparison period.")
-        elif loan_interest_move<-1:
-            st.info(f"In this replay, repricing decreases interest paid by approximately "
-                    f"{money(abs(loan_interest_move))} over the comparison period.")
+            st.info(
+                "Your uploaded files don't include historical consumer loan rates for "
+                "this region. Instead, this example assumes that some central-bank rate "
+                "changes affect your loan rate. That connection is hypothetical, not "
+                "an observed change in loan rates."
+            )
+            with st.expander("Advanced: adjust how strongly your loan follows central-bank rates"):
+                loan_pass_through=st.slider(
+                    "Share of central-bank rate changes applied to your loan (%)",
+                    min_value=0,max_value=100,value=50,step=10,
+                    key=f"loan_policy_response_{CURRENCY_CODE}",
+                    help="At 50%, a 2-percentage-point change in the policy rate "
+                         "would change the example loan rate by 1 percentage point. "
+                         "This is an assumption, not a measured relationship."
+                )
+            st.caption(
+                f"Assumption: {loan_pass_through}% of the recorded central-bank rate "
+                "changes pass through to your loan. No actual bank loan quotes are used."
+            )
+        loan_path=scenario_rate_path(
+            rate_history,loan_period_start,loan_period_end,interest_rate,
+            observed_levels=False,pass_through_pct=loan_pass_through
+        )
+        loan_stress=simulate_loan_rate_replay(
+            loan_amount,interest_rate,int(loan_years),extra_monthly,loan_path
+        )
+        modeled_yearly=loan_stress["yearly"]
+        if len(modeled_yearly)>1:
+            second_rate=float(modeled_yearly["Scenario rate (%)"].iloc[1])
+            st.write(
+                f"**A simple example:** Your loan starts at **{interest_rate:.2f}%**. "
+                f"Following the selected past pattern, its rate in year 2 becomes "
+                f"**{second_rate:.2f}%**. We then recalculate the required monthly "
+                "payment using the amount you still owe."
+            )
+        last_required=float(modeled_yearly["Required payment / month"].iloc[-1])
+        last_rate=float(modeled_yearly["Scenario rate (%)"].iloc[-1])
+        fixed_required=loan_stress["fixed_payment"]
+        peak_required=loan_stress["peak_required_payment"]
+        peak_increase=max(0.,peak_required-fixed_required)
+        years_compared=loan_stress["months_compared"]/12
+        tested_years=f"{int(years_compared)}" if years_compared.is_integer() else f"{years_compared:g}"
+
+        st.markdown("**Your results: fixed rate vs changing rate**")
+        if last_required>fixed_required+1:
+            result_title=f"Your monthly payment could rise to {money(last_required,2)}"
+            result_detail="In the last modeled year, the required payment is higher than if your rate stayed fixed."
+        elif last_required<fixed_required-1:
+            result_title=f"Your monthly payment could fall to {money(last_required,2)}"
+            result_detail="In the last modeled year, the required payment is lower than if your rate stayed fixed."
         else:
-            st.info("This rate path makes almost no difference to interest over the comparison period.")
-        st.caption("Historical years provide the sequence of annual rate MOVEMENTS; the simulation "
-                   "starts today at your chosen rate. A fixed-rate contract would not reprice this way. "
-                   "This is a rate-risk illustration, not a forecast or lender offer.")
-        with st.expander("How the stress test changes your loan, year by year"):
-            st.dataframe(loan_stress['yearly'],hide_index=True,use_container_width=True)
-            download_csv("Download loan rate stress test CSV",loan_stress['yearly'],
+            result_title=f"Your monthly payment stays around {money(fixed_required,2)}"
+            result_detail="The last modeled year's required payment is about the same as the fixed-rate payment."
+        answer(
+            "WHAT THIS EXAMPLE SHOWS",result_title,
+            result_detail+f" The comparison covers {tested_years} year(s) of loan payments.",
+            caution=last_required>fixed_required*1.05
+        )
+        cards([
+            ("If your rate stays fixed",money(fixed_required,2),
+             "Required per month throughout the loan"),
+            ("If your rate changes",money(last_required,2),
+             "Required per month in the last tested year"),
+            ("Highest payment in this test",money(peak_required,2),
+             f"Up to {money(peak_increase,2)} more than the fixed payment"),
+            ("Rate in last tested year",f"{last_rate:.2f}%",
+             f"Started at your chosen {interest_rate:.2f}% rate"),
+        ])
+        interest_move=loan_stress["interest_difference"]
+        if interest_move>1:
+            st.info(
+                f"**Interest cost:** over the {tested_years}-year comparison, changing "
+                f"rates would cost {money(interest_move)} **more interest** than "
+                "keeping your rate fixed."
+            )
+        elif interest_move<-1:
+            st.info(
+                f"**Interest cost:** over the {tested_years}-year comparison, changing "
+                f"rates would cost {money(abs(interest_move))} **less interest** than "
+                "keeping your rate fixed."
+            )
+        else:
+            st.info("**Interest cost:** this historical pattern makes almost no difference "
+                    "compared with keeping your rate fixed.")
+        st.caption(
+            f"At the end of this comparison, you would still owe "
+            f"{money(loan_stress['scenario_balance'])} in the changing-rate example, "
+            f"versus {money(loan_stress['fixed_balance'])} with a fixed rate."
+        )
+        if extra_monthly>0:
+            st.caption(
+                f"Payments above are the bank's **required** monthly amounts. Your "
+                f"optional extra {money(extra_monthly)} per month is added to both "
+                "scenarios, but is not included in those payment numbers."
+            )
+        st.caption(
+            "This is a simplified illustration. Actual variable-rate loan contracts "
+            "can have different reset rules, fees and caps. Past rate movements do not "
+            "predict future rates."
+        )
+        with st.expander("See yearly payments and how this works"):
+            st.markdown(
+                "**How we calculate the example:** Year 1 starts at your entered loan "
+                "rate. In later years, we follow the same increases or decreases as the "
+                "selected historical pattern. The required monthly payment is recalculated "
+                "whenever the rate changes, using the loan balance and remaining term. "
+                "We compare the same number of months with a loan whose rate stays fixed."
+            )
+            display_years=modeled_yearly["Historical year"].astype(int).astype(str)
+            display_payments=pd.DataFrame({
+                "Historical pattern year":display_years,
+                "Example loan rate":modeled_yearly["Scenario rate (%)"].map(lambda v:f"{v:.2f}%"),
+                "Required monthly payment":modeled_yearly["Required payment / month"].map(lambda v:money(v,2)),
+                "Debt still owed":modeled_yearly["Remaining balance"].map(money),
+            })
+            st.caption(
+                "The years in this table identify the past rate pattern, not actual "
+                "future dates. These are modeled loan results, not historical loan payments."
+            )
+            st.dataframe(display_payments,hide_index=True,use_container_width=True)
+            download_csv("Download detailed simulation (CSV)",modeled_yearly,
                          "loan_historical_rate_stress.csv")
 
     extra_scenarios=annual_loan_scenario(loan_amount,interest_rate,loan_years,extra_monthly,loan_start)
