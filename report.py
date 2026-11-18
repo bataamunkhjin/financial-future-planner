@@ -143,15 +143,15 @@ def generate_pdf_report(
     loan_rate_sensitivity: pd.DataFrame,
     loan_extra_sensitivity: pd.DataFrame,
     retirement_sensitivity: pd.DataFrame,
-    investing: dict,
     base_loan_schedule: pd.DataFrame,
     chosen_loan_schedule: pd.DataFrame,
     retirement_projection_df: pd.DataFrame,
     loan_insights: list[str],
     retirement_insights: list[str],
-    investment_insights: list[str],
     loan_milestones: pd.DataFrame | None = None,
     investment_sensitivity: pd.DataFrame | None = None,
+    investing: dict | None = None,  # Unused legacy argument for older integration tests.
+    investment_insights: list[str] | None = None,  # Unused legacy argument.
     savings_goal: dict | None = None,
     retirement_life_df: pd.DataFrame | None = None,
     inflation_df: pd.DataFrame | None = None,
@@ -257,40 +257,15 @@ def generate_pdf_report(
     ], width=width, height=145))
 
     story.append(PageBreak())
-    heading("02  |  Loan prepayment versus investing")
-    para("Both strategies have the same fixed monthly cash budget. Investing uses the leftover cash while making standard loan payments. Prepaying puts the extra toward the loan and invests the freed payment after payoff.")
-    table(["Assumption / result", "Value", "Assumption / result", "Value"], [
-        ["Extra budget / month", _currency(investing["comparison_extra"], code), "Investment annual return", f'{retirement["return"]:.2f}%'],
-        ["Fixed monthly budget", _currency(investing["monthly_budget"], code), "Comparison horizon", f'{investing["horizon_months"] // 12} years'],
-        ["Invest extra - end value", _currency(investing["invest_portfolio"], code), "Prepay first - end value", _currency(investing["prepay_portfolio"], code)],
-        ["Modeled winner", investing["winner"], "End value difference", _currency(abs(investing["difference"]), code)],
-    ], [127, 122, 141, width-390])
-    small("Both strategies are debt-free by the scheduled loan maturity. Results are future nominal portfolio balances, not inflation-adjusted figures. Fixed investment return, no investing taxes/fees, no purchased-asset valuation, liquidity constraints or prepayment fees. This is a sensitivity model, not a recommendation.")
-    plot = investing["table"]
-    heading("Net financial wealth (investment balance minus outstanding debt)")
-    story.append(_line_chart([
-        ("Invest extra", plot["Month"].to_numpy(), plot["Invest Strategy Net Wealth"].to_numpy(), BLUE),
-        ("Prepay first", plot["Month"].to_numpy(), plot["Prepay Strategy Net Wealth"].to_numpy(), TEAL),
-    ], width=width, height=145))
+    heading("02  |  Loan repayment milestones and insights")
     if loan_milestones is not None:
-        heading("Loan principal repayment milestones")
         table(["Repaid", "Month", "Payoff date", "Balance remaining"], [
             [row["Loan Repaid"], str(row["Payment Month"]), str(row["Payment Date"]),
              _currency(row["Balance Remaining"], code)] for _, row in loan_milestones.iterrows()
         ], [70, 65, 150, width - 285])
-    if investment_sensitivity is not None:
-        heading("Investing return stress test")
-        table(["Scenario", "Return", "Invest - prepay", "Favored strategy"], [
-            [row["Scenario"], f'{row["Investment Return (%)"]:.2f}%',
-             _currency(row["Invest - Prepay"], code), row["Favored Strategy"]]
-            for _, row in investment_sensitivity.iterrows()
-        ], [173, 65, 133, width - 371])
-        small("Investment return cases are hypothetical constants, not a probability distribution or recommended strategy.")
-    heading("Loan and investing insights")
-    for line in (loan_insights + investment_insights)[:2]:
+    for line in loan_insights[:3]:
         para("- " + line)
 
-    story.append(PageBreak())
     heading("03  |  Retirement readiness")
     table(["Retirement input", "Value", "Result", "Value"], [
         ["Current age", retirement["current_age"], "Planned retirement age", retirement["retirement_age"]],
@@ -320,23 +295,16 @@ def generate_pdf_report(
         [r["Scenario"], int(r["Retirement Age"]), _currency(r["Portfolio"], code),
          _currency(r["Surplus / Shortfall"], code)] for _, r in retirement_sensitivity.iterrows()
     ], [151, 75, 151, width-377])
-    heading("Constant-return savings and retirement drawdown")
-    story.append(_line_chart([
-        ("Real portfolio", retirement_projection_df["Age"].to_numpy(),
-         retirement_projection_df["Balance (today's money)"].to_numpy(), TEAL),
-    ], width=width, height=145))
-    story.append(PageBreak())
     heading("04  |  Interpretation and model transparency")
     heading("Retirement insights")
     for line in retirement_insights[:4]:
         para("- " + line)
     small(f"Monte Carlo: {retirement['simulations']:,} illustrative independent-annual-return paths. Fully funding every withdrawal through age {retirement['planning_age']}: {retirement['sustain_probability']:.1%}.")
-    small("Not modeled: local tax rules, employer/pension income, fees, unplanned changes to contributions or spending, variable loan rates, or correlations. Temporary inflation shocks are analyzed separately with fixed nominal investment returns. Retirement assumptions use constant real purchasing power, with optional annual growth to the real monthly contribution; loan prepayment comparison uses constant nominal cash flows.")
+    small("Not modeled: local tax rules, employer/pension income, fees, unplanned changes to contributions or spending, variable loan rates, or correlations. Temporary inflation shocks are analyzed separately with fixed nominal investment returns. Retirement assumptions use constant real purchasing power, with optional annual growth to the real monthly contribution.")
     heading("What these results mean")
     table(["Measure", "Interpretation"], [
         ["Total loan interest", "Cumulative interest charged under the assumed fixed-rate amortization schedule."],
         ["Principal milestones", "The first loan payment date when the stated share of ORIGINAL principal is repaid."],
-        ["Loan payoff vs investing", "Two strategies with equal monthly cash spending, compared at original loan maturity."],
         ["Retirement capital needed", "Present value of planned real monthly spending through the chosen age, using a constant real return."],
         ["80% simulated savings goal", "Monthly saving for at least ~80% of simulated paths to fund every modeled withdrawal."],
         ["Monte Carlo spending success", "Share of simulated paths able to fund all modeled monthly withdrawals until planning age."],
@@ -344,7 +312,6 @@ def generate_pdf_report(
     heading("Calculation assumptions")
     table(["Topic", "Method and important omissions"], [
         ["Monthly loan payment", "Annual nominal loan rate divided by 12; extra repayments go to principal; no penalties."],
-        ["Investment comparison", "Constant nominal monthly budget and hypothetical fixed investment returns; no taxes or market risk."],
         ["Real-value retirement model", "Annual nominal return and inflation converted to monthly REAL returns; real savings may grow yearly above inflation while real spending stays fixed."],
         ["Monte Carlo simulation", "Independent annual lognormal return samples spread equally across each year; fixed inflation; fixed random seed."],
         ["Drawdown capital method", "Discounted monthly withdrawals over the selected horizon at an assumed constant real return."],

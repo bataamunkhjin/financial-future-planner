@@ -1,4 +1,4 @@
-"""Financial Future Planner v7.3 — clear loan-rate scenarios.
+"""Financial Future Planner v7.5 — readable tables, clearer charts, simplified retirement.
 
 Two planners retain their core functionality. Currency labels are not FX conversions.
 All simulations and forecasts are hypothetical educational illustrations.
@@ -23,12 +23,11 @@ from finance import (
     retirement_what_if_scenarios, retirement_projection,
     monte_carlo_projection, simulated_lifetime_savings_goal,
     retirement_life_schedule, inflation_purchasing_power,
-    inflation_shock_projection, compare_mortgage_vs_investing,
-    mortgage_investing_return_scenarios,
+    inflation_shock_projection,
 )
 from report import generate_pdf_report
 from historical_data import (scenario_source, consecutive_windows, scenario_rate_path,
-                             simulate_loan_rate_replay, simulate_savings_rate_replay)
+                             simulate_loan_rate_replay)
 
 st.set_page_config(
     page_title="Financial Future Planner", page_icon="F", layout="wide",
@@ -236,23 +235,102 @@ def answer(label: str, title: str, explanation: str, caution: bool = False) -> N
                 f'<div class="fp-answer-title">{escape(title)}</div>'
                 f'<div class="fp-answer-sub">{escape(explanation)}</div></div>', unsafe_allow_html=True)
 
+def improve_chart_series(fig: go.Figure) -> None:
+    """Distinguish variables by hue AND dash pattern, without recoloring shaded bands.
+
+    The same legend labels appear in the unified hover tooltip with comma-grouped,
+    two-decimal values. This is presentation-only; the plotted data are unchanged.
+    """
+    # Strong-contrast, accessible on a light background. Distinct dashes remain
+    # legible for people who have difficulty distinguishing colors.
+    colors = ("#126B82", "#B45309", "#6C4BA8", "#087A63")
+    dashes = ("solid", "dash", "dot", "dashdot")
+    lines = [trace for trace in fig.data if trace.type == "scatter"
+             and getattr(trace, "showlegend", None) is not False
+             and getattr(trace, "fill", None) != "tonexty"
+             and (getattr(trace.line, "width", None) != 0)]
+    for index, trace in enumerate(lines):
+        label = (trace.name or "").lower()
+        # Meaning-based mapping gives fixed/normal scenarios a dashed orange line,
+        # and selected/median scenarios a solid teal line across graphs.
+        if any(term in label for term in ("standard repayment", "steady-return estimate")):
+            color, dash = colors[1], "dash"
+        elif any(term in label for term in ("with extra payments", "typical simulated", "portfolio incl", "inflation shock", "normal")):
+            color, dash = colors[0], "solid"
+            if "inflation shock" in label: color, dash = colors[1], "dash"
+        elif "deposits" in label or "savings +" in label:
+            color, dash = colors[2], "dash"
+        else:
+            color, dash = colors[index % len(colors)], dashes[index % len(dashes)]
+        # Keep a single-series chart solid for easier visual tracking.
+        if len(lines) == 1 and not any(term in label for term in ("inflation shock",)):
+            dash = "solid"
+        trace.update(line=dict(color=color, width=3.8, dash=dash))
+        if getattr(trace, "hoverinfo", None) != "skip":
+            trace.update(hovertemplate="%{x}<br>%{fullData.name}: %{y:,.2f}<extra></extra>")
+        if len(lines) > 1 and len(trace.x) <= 45:
+            trace.update(mode="lines+markers", marker=dict(size=6, color=color,
+                         symbol=("circle", "diamond", "square", "x")[index % 4]))
+    for trace in fig.data:
+        if trace.type == "bar" and getattr(trace, "hovertemplate", None) is None:
+            if getattr(trace, "orientation", None) == "h":
+                trace.update(hovertemplate="%{fullData.name}: %{x:,.2f}<extra></extra>")
+            else:
+                trace.update(hovertemplate="%{fullData.name}: %{y:,.2f}<extra></extra>")
+
+
 def chart(fig: go.Figure, *, x_label: str = "", y_label: str = "", height: int = 390) -> None:
+    improve_chart_series(fig)
     fig.update_layout(
         template="plotly_white", height=height,
-        margin=dict(l=55, r=22, t=82, b=66),
+        margin=dict(l=65, r=25, t=106, b=66),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Inter, Segoe UI, sans-serif", size=14, color="#28475B"),
-        colorway=["#167C75", "#557FA8", "#B77C38", "#8B74B1"],
-        legend=dict(orientation="h", y=1.16, x=0, bgcolor="rgba(0,0,0,0)", font=dict(size=13)),
-        hovermode="x unified", hoverlabel=dict(bgcolor="#FFFFFF",font_size=14,font_color="#183247",bordercolor="#D9E3E7"),
+        colorway=["#126B82", "#B45309", "#6C4BA8", "#087A63"],
+        legend=dict(orientation="h", y=1.16, x=0, xanchor="left", yanchor="bottom",
+                    bgcolor="rgba(0,0,0,0)", font=dict(size=15, color="#1A3548"),
+                    traceorder="normal", itemclick="toggle", itemdoubleclick="toggleothers"),
+        hovermode="x unified", hoverlabel=dict(bgcolor="#FFFFFF",font_size=15,font_color="#183247",bordercolor="#D9E3E7",namelength=-1),
     )
     fig.update_xaxes(title=x_label, showgrid=False, zeroline=False,
-                     title_font=dict(size=13,color="#526B7B"), tickfont=dict(size=13), linecolor="#CAD7DE")
+                     title_font=dict(size=14,color="#41596A"), tickfont=dict(size=14), linecolor="#CAD7DE")
     fig.update_yaxes(title=y_label, gridcolor="rgba(58,93,110,.12)",
                      zeroline=False, separatethousands=True,
-                     title_font=dict(size=13,color="#526B7B"), tickfont=dict(size=13))
+                     title_font=dict(size=14,color="#41596A"), tickfont=dict(size=14))
     st.plotly_chart(fig, use_container_width=True, theme=None,
                     config={"displayModeBar":False,"scrollZoom":False,"responsive":True})
+
+# Keep underlying DataFrames numeric for financial calculations, sorting, and raw CSV
+# downloads. Apply presentation-only formatting to every table, including paged ones.
+def table_formatters(data: pd.DataFrame) -> dict[str, str]:
+    """Select clear display formats by value type and financial column meaning.
+
+    Money, balances, returns and percentages: 1,234,567.89.
+    Discrete ages, months, and years: 24 (no invented decimal fraction).
+    Dates, descriptions, booleans and already-formatted labels are untouched.
+    """
+    discrete_names = {
+        "age", "retirement age", "earliest age", "year", "historical year",
+        "historical pattern year", "month", "payment month", "payoff month",
+        "payoff months", "months", "years", "term (years)",
+    }
+    formats: dict[str, str] = {}
+    for column in data.columns:
+        series = data[column]
+        if pd.api.types.is_bool_dtype(series) or not pd.api.types.is_numeric_dtype(series):
+            continue
+        name = str(column).strip().lower()
+        is_discrete = name in discrete_names or name.endswith(" age") or name.endswith(" months")
+        formats[column] = "{:,.0f}" if is_discrete or pd.api.types.is_integer_dtype(series) else "{:,.2f}"
+    return formats
+
+
+def formatted_table(data: pd.DataFrame, **kwargs) -> None:
+    """Render grouped, rounded values without altering numeric source data."""
+    formats = table_formatters(data)
+    display = data.style.format(formats, na_rep="—") if formats else data
+    st.dataframe(display, hide_index=True, use_container_width=True, **kwargs)
+
 
 def paged_table(data: pd.DataFrame, *, key: str, page_size: int = 10) -> None:
     total = len(data)
@@ -265,7 +343,7 @@ def paged_table(data: pd.DataFrame, *, key: str, page_size: int = 10) -> None:
     # Ten rows maximum; an explicit content-sized height works on old and new Streamlit.
     # Avoid a nested scrollbar inside a fixed-height data table.
     visible_height = 40 * (len(data) + 1) + 16
-    st.dataframe(data,hide_index=True,use_container_width=True,height=visible_height)
+    formatted_table(data, height=visible_height)
 
 
 def download_csv(label: str, frame: pd.DataFrame, filename: str) -> None:
@@ -519,7 +597,7 @@ with loan_tab:
                 "The years in this table identify the past rate pattern, not actual "
                 "future dates. These are modeled loan results, not historical loan payments."
             )
-            st.dataframe(display_payments,hide_index=True,use_container_width=True)
+            formatted_table(display_payments)
             download_csv("Download detailed simulation (CSV)",modeled_yearly,
                          "loan_historical_rate_stress.csv")
 
@@ -528,9 +606,9 @@ with loan_tab:
     milestones=loan_payoff_milestones(chosen,loan_amount)
     with st.expander("Compare extra payments and interest-rate scenarios"):
         section("Pay more or pay less?","Automatically compare several payment strategies.")
-        st.dataframe(extra_scenarios,hide_index=True,use_container_width=True)
+        formatted_table(extra_scenarios)
         section("What if the interest rate changed?","These are scenarios for a new loan, not repricing your existing fixed-rate loan.")
-        st.dataframe(rate_scenarios,hide_index=True,use_container_width=True)
+        formatted_table(rate_scenarios)
         scenario_view=st.selectbox("Choose a scenario chart",[
             "Interest saved with extra payments", "Monthly payment at different rates", "Annual principal and interest"
         ],key="loan_scenario_chart")
@@ -555,7 +633,7 @@ with loan_tab:
             chart(scenario_fig,x_label="Year",y_label=f"Annual repayment ({CURRENCY})",height=320)
         st.caption("Higher rates increase borrowing costs, but all results are illustrative.")
     with st.expander("Repayment milestones and amortization table"):
-        st.dataframe(milestones,hide_index=True,use_container_width=True)
+        formatted_table(milestones)
         paged_table(chosen,key="amortization_table")
         download_csv("Download complete amortization CSV",chosen,"loan_amortization.csv")
 
@@ -722,7 +800,7 @@ with retirement_tab:
         mc_fig.add_vline(x=int(retirement_age),line_dash="dot",line_color="#8A9EA9")
         chart(mc_fig,x_label="Your age",y_label=f"Portfolio ({CURRENCY}, today's money)",height=425)
         st.caption("Shaded area: 10th–90th percentile at each age. Green line: median outcome. "
-                   "Gold dashed line: fixed annual return. Simulations assume constant inflation and independent annual returns.")
+                   "Orange dashed line: fixed annual return. Simulations assume constant inflation and independent annual returns.")
     else:
         savings_build=projection[projection["Age"]<=int(retirement_age)].copy()
         savings_build["Starting savings + deposits"]=(retirement_savings+savings_build["Cumulative Contributions"])
@@ -735,7 +813,7 @@ with retirement_tab:
                   line=dict(color="#167C75",width=3)))
         chart(growth_fig,x_label="Age",y_label=f"Savings ({CURRENCY}, today's money)",height=385)
         st.caption("Shows cumulative deposits in today's money and the portfolio including modeled investment returns. "
-                   "Annual increases to savings are included in the blue line.")
+                   "Annual increases to savings are included in the dashed purple line.")
 
     with st.expander("Ways to improve your retirement plan"):
         cards([
@@ -745,7 +823,7 @@ with retirement_tab:
             ("Monthly saving for ~80% success",money(savings_goal_80["monthly_contribution_needed"]),"Illustrative Monte Carlo target"),
         ])
         st.caption("An 80% modeled threshold is not a recommended risk level. Higher contributions may improve success, but not guarantee it.")
-        st.dataframe(retirement_scenarios,hide_index=True,use_container_width=True)
+        formatted_table(retirement_scenarios)
         st.caption(f"Your first monthly saving is {money(retirement_contribution)}. "
                    f"With {annual_savings_increase:.1f}% annual real growth, the last-year "
                    f"monthly amount is {money(last_year_contribution)}. "
@@ -792,76 +870,6 @@ with retirement_tab:
         chart(purchasing,x_label="Age",y_label=f"Monthly spending ({CURRENCY})",height=340)
         download_csv("Download inflation projection CSV",inflation_table,"inflation_projection.csv")
 
-    with st.expander("Savings rate stress test — replay past rate changes", expanded=False):
-        st.caption("If you put money into a bank savings account for several years, how much "
-                   "might changing interest rates matter? Compare a steady deposit rate with a "
-                   "scenario derived from your uploaded historical data.")
-        savings_history,savings_basis=scenario_source(CURRENCY_CODE,"savings")
-        sp1,sp2=st.columns(2,gap="large")
-        with sp1:
-            savings_window_years=st.selectbox("Savings stress period (years)",[3,5,10],index=1,
-                                               key=f"savings_stress_length_{CURRENCY_CODE}")
-        savings_periods=consecutive_windows(savings_history,savings_window_years)
-        with sp2:
-            savings_period_label=st.selectbox("Replay which historical period?",
-                [f"{a}–{b}" for a,b in savings_periods],key=f"savings_stress_period_{CURRENCY_CODE}")
-        savings_period_start,savings_period_end=savings_periods[
-            [f"{a}–{b}" for a,b in savings_periods].index(savings_period_label)]
-        if savings_basis=="retail":
-            st.caption("The changing-rate scenario uses the OBSERVED annual bank deposit-rate "
-                       "benchmarks for the selected years, not current bank offers.")
-            savings_levels=True
-            savings_response=100
-        else:
-            st.info("Your uploaded files have no historical bank deposit rates for this region. "
-                    "The test uses changes in a policy-rate series as hypothetical movements "
-                    "around YOUR editable bank deposit rate. These are NOT observed savings rates. " +
-                    ("The exact definition of the uploaded U.S. daily rate series is unverified."
-                     if CURRENCY_CODE=="USD" else ""))
-            savings_levels=False
-            savings_response=st.slider("Assumed deposit-rate response to policy movements (%)",
-                                       min_value=0,max_value=100,value=50,step=10,
-                                       key=f"savings_policy_response_{CURRENCY_CODE}")
-        savings_path=scenario_rate_path(savings_history,savings_period_start,savings_period_end,
-                                      bank_deposit_rate,observed_levels=savings_levels,
-                                      pass_through_pct=savings_response)
-        savings_stress=simulate_savings_rate_replay(
-            retirement_savings,retirement_contribution,bank_deposit_rate,inflation,
-            annual_savings_increase,savings_path)
-        answer("HISTORICAL SAVINGS STRESS RESULT",
-               f"{money(savings_stress['scenario_balance'])} after {savings_stress['years']} years",
-               f"Compared with {money(savings_stress['steady_balance'])} if your bank rate "
-               f"remained at {bank_deposit_rate:.2f}%. Both figures use today's purchasing power.",
-               caution=savings_stress['difference'] < 0)
-        cards([
-            ("Difference from steady rate",money(savings_stress['difference']),"Changing minus steady outcome"),
-            ("Total added savings",money(savings_stress['contributions']),"Deposits in today's money"),
-            ("Spending coverage",f"{savings_stress['scenario_balance']/target_income:.1f} months",
-             "At your chosen monthly spending level"),
-            ("Steady bank-rate scenario",f"{bank_deposit_rate:.2f}%","Your editable annual rate"),
-        ])
-        difference_savings=savings_stress['difference']
-        if difference_savings>1:
-            st.info(f"In this replay, changing bank rates produce about "
-                    f"{money(abs(difference_savings))} MORE purchasing-power savings "
-                    "than keeping your deposit rate constant.")
-        elif difference_savings<-1:
-            st.info(f"In this replay, changing bank rates produce about "
-                    f"{money(abs(difference_savings))} LESS purchasing-power savings "
-                    "than keeping your deposit rate constant.")
-        else:
-            st.info("This rate path produces almost the same result as the steady bank rate.")
-        st.caption(f"This standalone {savings_stress['years']}-year bank savings test continues monthly "
-                   "deposits for the entire period, independent of the selected retirement age. "
-                   f"It is NOT your full retirement projection or Monte Carlo investment result. "
-                   f"Returns are adjusted using your constant {inflation:.1f}% inflation assumption, "
-                   "NOT historical inflation; no tax, fees, or account restrictions. "
-                   "Historical periods are illustrative scenarios, not forecasts.")
-        with st.expander("See year-by-year bank savings simulation"):
-            st.dataframe(savings_stress['yearly'],hide_index=True,use_container_width=True)
-            download_csv("Download savings rate stress test CSV",savings_stress['yearly'],
-                         "savings_historical_rate_stress.csv")
-
     # Inflation shock is modeled even if its detail expander is closed so PDF stays accurate.
     with st.expander("Inflation shock simulator"):
         st.caption("Compare normal inflation with a temporary inflation surge starting at retirement.")
@@ -902,9 +910,6 @@ with retirement_tab:
          else f"With current spending, steady-return savings run short near age {depletion_age:.1f}."),
         f"Modeled monthly saving required: {money(needed_per_month)}; extra above current saving: {money(additional_saving)}.",
         f"{simulation['sustain_probability']:.1%} of {simulations} simulated paths fund every withdrawal through age {planning_age}.",
-        (f"Bank savings stress test ({savings_period_label}): estimated {money(savings_stress['scenario_balance'])} "
-         f"after {savings_stress['years']} years versus {money(savings_stress['steady_balance'])} "
-         "under a steady deposit rate; this is NOT the investment portfolio projection."),
         f"Savings deposits increase {annual_savings_increase:.1f}% yearly above inflation "
         f"(monthly contribution in the last saving year: {money(last_year_contribution)}).",
         "Results assume no pensions, taxes, investment fees, or flexible spending; all savings and spending use today's money.",
@@ -913,38 +918,6 @@ with retirement_tab:
         paged_table(projection,key="retirement_projection_table")
         download_csv("Download yearly retirement projection CSV",projection,"retirement_projection.csv")
         download_csv("Download Monte Carlo percentiles CSV",fan,"monte_carlo_percentiles.csv")
-
-# ================ RELATED LOAN DECISION =================
-comparison_extra=extra_monthly if extra_monthly>0 else scheduled_payment*.05
-invest_comparison=compare_mortgage_vs_investing(loan_amount,interest_rate,loan_years,
-                                                  comparison_extra,expected_return,loan_start)
-investing_rate_cases=mortgage_investing_return_scenarios(loan_amount,interest_rate,loan_years,
-                                                          comparison_extra,expected_return,loan_start)
-investment_insights=[
-    f"Under a fixed return, {invest_comparison['winner']} has a modeled ending advantage of {money(abs(invest_comparison['difference']))}.",
-    f"Compared interest-rate break-even: {invest_comparison['breakeven_effective_annual_pct']:.2f}% effective annually; "
-    f"assumed investment return: {expected_return:.2f}% nominal.",
-]
-with loan_tab:
-    with st.expander("Optional: repay your loan early or invest instead?"):
-        st.caption("Both scenarios use the same monthly budget. The investment rate comes from Retirement assumptions.")
-        cards([
-            ("Monthly cash budget",money(invest_comparison["monthly_budget"]),"Same in both strategies"),
-            ("Invest-extra portfolio",money(invest_comparison["invest_portfolio"]),"At loan maturity"),
-            ("Prepay-first portfolio",money(invest_comparison["prepay_portfolio"]),"At loan maturity"),
-            ("Modeled advantage",money(abs(invest_comparison["difference"])),invest_comparison["winner"]),
-        ])
-        wealth=invest_comparison["table"]
-        fig=go.Figure()
-        fig.add_trace(go.Scatter(x=wealth["Month"],y=wealth["Invest Strategy Net Wealth"],
-                         name="Invest spare cash",line=dict(color="#557FA8",width=3)))
-        fig.add_trace(go.Scatter(x=wealth["Month"],y=wealth["Prepay Strategy Net Wealth"],
-                         name="Prepay then invest",line=dict(color="#167C75",width=3)))
-        chart(fig,x_label="Loan month",y_label=f"Net financial wealth ({CURRENCY})",height=350)
-        st.caption("This comparison excludes the value of items bought with the loan and assumes steady returns, no fees, and no taxes. "
-                   "It is not an investment recommendation.")
-        st.dataframe(investing_rate_cases,hide_index=True,use_container_width=True)
-        download_csv("Download loan vs investing CSV",wealth,"loan_vs_investing.csv")
 
 # ================ UNCHANGED PDF ENGINE =================
 report_data=generate_pdf_report(
@@ -964,11 +937,11 @@ report_data=generate_pdf_report(
           "simulations":int(simulations),"reach_probability":simulation["reach_target_probability"],
           "sustain_probability":simulation["sustain_probability"]},
     loan_rate_sensitivity=rate_scenarios,loan_extra_sensitivity=extra_scenarios,
-    loan_milestones=milestones,investment_sensitivity=investing_rate_cases,
+    loan_milestones=milestones,
     savings_goal=savings_goal_80,retirement_sensitivity=retirement_scenarios,
-    investing=invest_comparison,base_loan_schedule=standard,chosen_loan_schedule=chosen,
+    base_loan_schedule=standard,chosen_loan_schedule=chosen,
     retirement_projection_df=projection,loan_insights=loan_insights,
-    retirement_insights=retirement_insights,investment_insights=investment_insights,
+    retirement_insights=retirement_insights,
     retirement_life_df=retirement_yearly,inflation_df=inflation_table,inflation_shock=shock_result,
 )
 with st.sidebar:
